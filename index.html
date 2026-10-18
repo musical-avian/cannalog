@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Cannalog</title>
+    <meta name="description" content="Private medical cannabis log: doses, THC/CBD, symptoms, trends. Data stays on your device." />
+    <meta name="theme-color" content="#2f9e44" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="vendor/uPlot.min.css" />
+    <style>
+      :root {
+        --bg: #f7f8f6;
+        --panel: #ffffff;
+        --text: #1d211e;
+        --muted: #677068;
+        --line: #e1e5e0;
+        --accent: #2f9e44;
+        --thc: #2f9e44;
+        --cbd: #1c7ed6;
+        --good: #2b8a3e;
+        --bad: #c92a2a;
+        --good-bg: #d3f9d8;
+        --bad-bg: #ffe3e3;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121513;
+          --panel: #1b201c;
+          --text: #e6ebe7;
+          --muted: #95a097;
+          --line: #2c332d;
+          --accent: #51cf66;
+          --thc: #51cf66;
+          --cbd: #4dabf7;
+          --good: #69db7c;
+          --bad: #ff8787;
+          --good-bg: #1f3a24;
+          --bad-bg: #44201f;
+          color-scheme: dark;
+        }
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 80px; }
+      header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; }
+      h1 { font-size: 1.25rem; margin: 0; }
+      h2 { font-size: 1rem; margin: 16px 0 8px; }
+      main { padding: 0 16px; max-width: 720px; margin: 0 auto; }
+      .muted { color: var(--muted); font-size: 0.85rem; }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 8px 0; }
+      .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+      .spread { justify-content: space-between; }
+      .big { font-size: 1.4rem; font-weight: 600; }
+      .thc { color: var(--thc); }
+      .cbd { color: var(--cbd); }
+      button, select, input, textarea { font: inherit; color: inherit; }
+      button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-height: 40px; cursor: pointer; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button.danger { color: var(--bad); }
+      input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 40px; width: 100%; }
+      input[type="checkbox"], input[type="radio"] { width: auto; min-height: auto; }
+      label.field { display: block; margin: 8px 0; }
+      label.field > span { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 2px; }
+      nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+      nav.tabs button { flex: 1; border: 0; border-radius: 0; min-height: 56px; background: none; }
+      nav.tabs button[aria-current="page"] { color: var(--accent); font-weight: 600; }
+      .fab { position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%; font-size: 2rem; line-height: 1; background: var(--accent); color: #fff; border: 0; box-shadow: 0 2px 8px #0004; z-index: 6; }
+      .entry { cursor: pointer; }
+      .chip { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 0.85rem; border: 1px solid var(--line); }
+      .chip.good { background: var(--good-bg); color: var(--good); border-color: transparent; }
+      .chip.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+      button.chip { min-height: 36px; padding: 4px 12px; background: var(--panel); }
+      button.chip.good[aria-pressed="false"], button.chip.bad[aria-pressed="false"] { background: var(--panel); color: var(--muted); border-color: var(--line); }
+      .scores { display: grid; grid-template-columns: repeat(11, 1fr); gap: 2px; }
+      .scores button { padding: 0; min-height: 36px; font-size: 0.85rem; }
+      .scores button[aria-pressed="true"] { outline: 2px solid var(--text); font-weight: 700; }
+      table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+      th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+      th:first-child, td:first-child { text-align: left; }
+      .better { color: var(--good); font-weight: 600; }
+      .worse { color: var(--bad); font-weight: 600; }
+      .same, .none { color: var(--muted); }
+      dialog { border: 0; border-radius: 16px 16px 0 0; padding: 16px; width: 100%; max-width: 720px; margin: auto auto 0; max-height: 92vh; background: var(--panel); color: var(--text); }
+      dialog::backdrop { background: #0006; }
+      .toast { position: fixed; left: 16px; right: 16px; bottom: calc(140px + env(safe-area-inset-bottom)); background: var(--text); color: var(--bg); border-radius: 10px; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+      .toast button { background: none; color: inherit; border-color: var(--bg); }
+      .error { background: var(--bad-bg); color: var(--bad); border-radius: 8px; padding: 8px; }
+      pre { overflow: auto; font-size: 0.75rem; }
+      .chart { width: 100%; }
+      [hidden] { display: none; } /* last, so it beats .row/.toast display rules */
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Cannalog</h1>
+      <span class="muted" id="mode-badge"></span>
+    </header>
+    <main>
+      <div id="load-error" class="error" hidden></div>
+      <section id="view-day"></section>
+      <section id="view-week" hidden></section>
+      <section id="view-trends" hidden></section>
+      <section id="view-settings" hidden></section>
+      <p class="muted">Personal log, not medical or dosing advice. Data stays on this device until you export it.</p>
+    </main>
+
+    <button type="button" class="fab" id="add-entry" aria-label="Add entry">+</button>
+
+    <nav class="tabs">
+      <button type="button" data-view="day" aria-current="page">Day</button>
+      <button type="button" data-view="week">Week</button>
+      <button type="button" data-view="trends">Trends</button>
+      <button type="button" data-view="settings">Settings</button>
+    </nav>
+
+    <dialog id="entry-dialog">
+      <form id="entry-form" method="dialog">
+        <div class="row spread"><h2 id="entry-title">New entry</h2><button type="submit" value="cancel" formnovalidate>✕</button></div>
+        <label class="field"><span>Strain / product</span><select name="strainId" required></select></label>
+        <div class="row" style="flex-wrap: nowrap">
+          <label class="field" style="flex: 1"><span id="amount-label">Amount</span><input name="amount" type="number" inputmode="decimal" step="any" min="0" required /></label>
+          <label class="field" style="flex: 1"><span>Route</span><select name="route"><option value="inhaled">inhaled</option><option value="oral">oral</option></select></label>
+        </div>
+        <label class="field"><span>Time</span><input name="time" type="datetime-local" required /></label>
+        <p class="muted" id="entry-preview"></p>
+        <div id="entry-scores"></div>
+        <h2>Effects</h2>
+        <div class="row" id="entry-effects"></div>
+        <label class="field"><span>Note (mood, situation, anything)</span><textarea name="note" rows="2"></textarea></label>
+        <div class="row spread">
+          <button type="button" class="danger" id="entry-delete">Delete</button>
+          <button type="submit" class="primary" value="save">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="strain-dialog">
+      <form id="strain-form" method="dialog">
+        <div class="row spread"><h2 id="strain-title">Strain / product</h2><button type="submit" value="cancel" formnovalidate>✕</button></div>
+        <label class="field"><span>Name</span><input name="strainName" required /></label>
+        <label class="field"><span>Form</span>
+          <select name="strainForm"><option value="flower">flower (mg × %)</option><option value="oil">oil / tincture (ml × mg/ml)</option><option value="edible">edible / capsule (units × mg)</option></select>
+        </label>
+        <div class="row" style="flex-wrap: nowrap">
+          <label class="field" style="flex: 1"><span id="thc-label">THC</span><input name="thc" type="number" inputmode="decimal" step="any" min="0" required /></label>
+          <label class="field" style="flex: 1"><span id="cbd-label">CBD</span><input name="cbd" type="number" inputmode="decimal" step="any" min="0" required /></label>
+        </div>
+        <label class="row"><input name="acid" type="checkbox" /> Label lists THCA/CBDA (raw acid form)</label>
+        <p class="muted">Tick only if the label gives the acid form. Then "decarboxylated" mode multiplies by 0.877.</p>
+        <div class="row spread">
+          <button type="button" class="danger" id="strain-delete">Delete</button>
+          <button type="submit" class="primary" value="save">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" hidden><span id="toast-text"></span><button type="button" id="toast-undo">Undo</button></div>
+
+    <script src="vendor/uPlot.iife.min.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

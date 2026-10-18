@@ -1,0 +1,11 @@
+{
+  "name": "Cannalog",
+  "short_name": "Cannalog",
+  "description": "Private medical cannabis log. Data stays on your device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f8f6",
+  "theme_color": "#2f9e44",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
