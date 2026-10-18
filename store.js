@@ -1,12 +1,13 @@
 // Data shape, validation, local storage, JSON/CSV backup. No DOM. Shape is documented in docs/data.md.
 
-import { activeMg, dayKey, productMg } from "./calc.js";
+import { activeMg, dayKey, isDose, productMg } from "./calc.js";
 
 export const STORAGE_KEY = "cannalog.v1";
+// step = smallest amount you can realistically measure (calculator rounds to it): 1 mg on a scale, 0.05 ml (~1 drop), ¼ edible.
 export const FORMS = {
-  flower: { amountUnit: "mg", strengthUnit: "%", defaultRoute: "inhaled" },
-  oil: { amountUnit: "ml", strengthUnit: "mg/ml", defaultRoute: "oral" },
-  edible: { amountUnit: "units", strengthUnit: "mg/unit", defaultRoute: "oral" },
+  flower: { amountUnit: "mg", strengthUnit: "%", defaultRoute: "inhaled", step: 1 },
+  oil: { amountUnit: "ml", strengthUnit: "mg/ml", defaultRoute: "oral", step: 0.05 },
+  edible: { amountUnit: "units", strengthUnit: "mg/unit", defaultRoute: "oral", step: 0.25 },
 };
 export const ROUTES = ["inhaled", "oral"];
 export const THEMES = ["auto", "light", "dark"]; // auto = follow the phone setting
@@ -32,7 +33,30 @@ export function defaultSettings() {
       { tag: "tired", good: false },
       { tag: "dizzy", good: false },
     ],
+    watchTags: defaultWatchTags(),
   };
+}
+
+// The one watch tag where "more" is good: a craving that passed without use.
+export const RESISTED_TAG = "urge resisted";
+
+/** Addiction-related signals worth watching. Can be logged with or without a dose. */
+export function defaultWatchTags() {
+  return [
+    "craving",
+    RESISTED_TAG,
+    "used to cope",
+    "boredom",
+    "more than planned",
+    "needed more",
+    "withdrawal: sleep",
+    "withdrawal: irritable",
+  ].map((tag) => ({ tag }));
+}
+
+/** watchTags was added after v1 shipped: older data has none, so fall back to the defaults. */
+export function watchTagsOf(settings) {
+  return settings.watchTags ?? defaultWatchTags();
 }
 
 export function emptyState() {
@@ -69,9 +93,12 @@ export function validateEntry(entry) {
   check(isText(entry?.id), "entry needs an id");
   const label = `entry ${entry.id}`;
   check(isText(entry.t) && !Number.isNaN(Date.parse(entry.t)), `${label}: time "${entry.t}" is not a date`);
-  validateStrain(entry.strain, `${label} strain`);
-  check(isNumber(entry.amount) && entry.amount > 0, `${label}: amount ${entry.amount} must be > 0`);
-  check(ROUTES.includes(entry.route), `${label}: route "${entry.route}" must be one of ${ROUTES.join(", ")}`);
+  // noDose entries (craving, event) have no product, amount or route.
+  if (isDose(entry)) {
+    validateStrain(entry.strain, `${label} strain`);
+    check(isNumber(entry.amount) && entry.amount > 0, `${label}: amount ${entry.amount} must be > 0`);
+    check(ROUTES.includes(entry.route), `${label}: route "${entry.route}" must be one of ${ROUTES.join(", ")}`);
+  }
   check(isText(entry.note), `${label}: note must be text`);
   for (const [name, value] of Object.entries(entry.scores ?? {})) {
     check(isNumber(value) && value >= 0 && value <= 10, `${label}: score ${name} = ${value} must be 0–10`);
@@ -80,6 +107,10 @@ export function validateEntry(entry) {
   for (const effect of entry.effects) {
     check(isText(effect.tag) && typeof effect.good === "boolean", `${label}: bad effect ${JSON.stringify(effect)}`);
   }
+  // watch: optional list of tag names (added after v1 shipped).
+  const watch = entry.watch ?? [];
+  check(Array.isArray(watch) && watch.every(isText), `${label}: watch must be a list of tag names`);
+  if (!isDose(entry)) check(watch.length > 0 || entry.note.trim() !== "", `${label}: entry without dose needs a watch tag or a note`);
 }
 
 /** Throws a readable Error if `state` is unusable; returns it otherwise. */
@@ -98,6 +129,7 @@ export function validate(state) {
   check(limit == null || (isNumber(limit) && limit > 0), `dailyLimitMg ${limit} must be a number > 0, or empty`);
   check(Array.isArray(settings.symptoms), "settings.symptoms must be a list");
   check(Array.isArray(settings.effectTags), "settings.effectTags must be a list");
+  check(settings.watchTags === undefined || Array.isArray(settings.watchTags), "settings.watchTags must be a list");
   return state;
 }
 
@@ -163,6 +195,7 @@ export function toCsv(state) {
     ...symptomNames,
     "good_effects",
     "bad_effects",
+    "watch",
     "note",
   ];
   const rows = [...state.entries]
@@ -178,8 +211,8 @@ export function toCsv(state) {
       return [
         dayKey(entry.t),
         entry.t,
-        entry.strain.name,
-        entry.strain.form,
+        entry.strain?.name ?? "(no dose)",
+        entry.strain?.form,
         entry.amount,
         entry.route,
         product.thc,
@@ -189,6 +222,7 @@ export function toCsv(state) {
         ...symptomNames.map((name) => entry.scores[name]),
         tags(true),
         tags(false),
+        (entry.watch ?? []).join("; "),
         entry.note,
       ];
     });

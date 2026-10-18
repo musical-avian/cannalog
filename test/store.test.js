@@ -97,3 +97,15 @@ test("daily limit: optional, must be > 0 when set", () => {
   s.settings.dailyLimitMg = 0;
   assert.throws(() => validate(s), /dailyLimitMg 0 must be a number > 0/);
 });
+
+test("no-dose entry: valid without product, needs a watch tag or note; old data without watch fields is valid", () => {
+  const s = sample();
+  delete s.settings.watchTags;
+  assert.doesNotThrow(() => validate(s));
+  const craving = { id: "c1", t: "2026-10-18T12:00:00.000Z", noDose: true, note: "", scores: {}, effects: [], watch: ["craving"] };
+  s.entries.push(craving);
+  assert.doesNotThrow(() => validate(s));
+  assert.match(toCsv(s), /\(no dose\).*craving/);
+  craving.watch = [];
+  assert.throws(() => validate(s), /entry c1: entry without dose needs a watch tag or a note/);
+});

@@ -41,3 +41,14 @@ Goal: stay as low as possible. All on THC mg/day in chart mode (decarb when mode
 - **Use-free days** per week; more = green.
 - **Arrows**: ▲/▼ = real direction, color = good/bad (pain ▼ green, THC ▲ red).
 - **Personal ceiling** (optional, user-set): dashed line on chart, bar on Day view.
+
+## 7. Dose calculator
+- mg per unit: flower `% / 100` per mg, oil mg/ml, edible mg/unit; × 0.877 if acid label (raw mode: no factor; absorbed treated as decarb, D5).
+- One product: `amount = THC mg / THC per unit`.
+- Two products, target THC `T` and ratio `r : 1`: solve `a·thcA + b·thcB = T`, `a·cbdA + b·cbdB = T / r`. Negative `a` or `b` → ratio not reachable; every mix lies between the two products' own ratios. Same ratio → mixing can't change it.
+- Amounts rounded to steps (1 mg, 0.05 ml, ¼ unit); the result shows what the **rounded** amounts really contain.
+
+## 8. Watch tags (cravings etc.)
+- Logged with a dose or without (`noDose` entry). No-dose entries add 0 mg, are not "uses", and don't break use-free days.
+- Counts per day/week; more = red, except "urge resisted" (more = green).
+- Trends: orange dot at the top of the mg chart on days with watch tags; notes panel lists them.

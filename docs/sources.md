@@ -10,5 +10,6 @@ Every number in `calc.js` comes from here. Test `test/calc.test.js` fails if a U
 | CBD inhaled bioavailability | 31 ± 13% → 18–44% | measured (smoked, n=5) | [Ohlsson 1986](https://doi.org/10.1002/bms.1200130206) |
 | CBD oral bioavailability | 6% | **assumed** (no human absolute value) | [Millar 2018](https://doi.org/10.3389/fphar.2018.01365) |
 | Trend smoothing α | 0.1 (trend moves 10% toward each day) | method choice | [Walker, The Hacker's Diet](https://www.fourmilab.ch/hackdiet/) |
+| Label accuracy (context for 5% "stable") | 17% of edibles labeled within ±10% | measured (n=75 products) | [Vandrey 2015](https://doi.org/10.1001/jama.2015.6613) |
 
 Same sources as the sibling project Halflives (`docs/presets.md` there).

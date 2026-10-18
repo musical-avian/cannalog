@@ -4,6 +4,7 @@
 import {
   activeMg,
   addDays,
+  amountForThc,
   CALC_MODES,
   dailyThcSeries,
   dayKey,
@@ -12,8 +13,11 @@ import {
   entriesBetween,
   goodness,
   groupByDay,
+  isDose,
   mean,
   median,
+  mgPerUnit,
+  mixForTarget,
   RATE_WINDOW_DAYS,
   rangeText,
   ratioText,
@@ -35,6 +39,7 @@ import {
   load,
   merge,
   newId,
+  RESISTED_TAG,
   STORAGE_KEY,
   save,
   THEMES,
@@ -42,6 +47,7 @@ import {
   toJson,
   validateEntry,
   validateStrain,
+  watchTagsOf,
 } from "./store.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -80,6 +86,7 @@ function dailyLimit() {
 }
 
 const CHART_FONT = "15px system-ui, sans-serif";
+const MARKER_HEIGHT = 0.95; // watch markers sit near the top of the mg chart (scale 0–1), above the bars
 
 /** Save, then redraw. Every change goes through here. */
 function commit() {
@@ -123,6 +130,10 @@ function trendSpan(now, before, higherIsBetter, threshold) {
 /** Usage: less is the goal, so up = red. */
 function usageSpan(now, before) {
   return directionSpan(usageChange(now, before), now > before);
+}
+
+function watchChips(tags) {
+  return (tags ?? []).map((tag) => `<span class="chip watch">${esc(tag)}</span>`).join(" ");
 }
 
 function effectChips(effects) {
@@ -186,16 +197,17 @@ function nextTheme() {
 // ---------- views ----------
 
 function render() {
-  for (const name of ["day", "week", "trends", "settings"]) {
+  for (const name of ["day", "week", "trends", "calc", "settings"]) {
     $(`#view-${name}`).hidden = name !== view;
     $(`nav [data-view="${name}"]`).toggleAttribute("aria-current", name === view);
   }
-  $("#add-entry").hidden = view === "settings";
+  $("#add-entry").hidden = view === "settings" || view === "calc";
   $("#mode-badge").textContent = `mg = ${CALC_MODES[mode()]}`;
   applyTheme();
   if (view === "day") renderDay();
   if (view === "week") renderWeek();
   if (view === "trends") renderTrends();
+  if (view === "calc") renderCalc();
   if (view === "settings") renderSettings();
 }
 
@@ -245,15 +257,21 @@ function renderDay() {
     const scores = Object.entries(entry.scores)
       .map(([name, value]) => `${esc(name)} ${value}`)
       .join(" · ");
+    const details = `
+      ${scores ? `<div class="muted">${scores}</div>` : ""}
+      ${entry.effects.length ? `<div class="row">${effectChips(entry.effects)}</div>` : ""}
+      ${entry.watch?.length ? `<div class="row">${watchChips(entry.watch)}</div>` : ""}
+      ${entry.note ? `<div>📝 ${esc(entry.note)}</div>` : ""}`;
+    if (!isDose(entry)) {
+      return `<div class="card entry no-dose" data-id="${entry.id}"><b>${time} no dose</b>${details}</div>`;
+    }
     return `<div class="card entry" data-id="${entry.id}">
       <div class="row spread"><b>${time} ${esc(entry.strain.name)}</b><span class="muted">${amountText(entry)} ${entry.route}</span></div>
       <div class="row spread">
         <span><span class="thc">${rangeText(active.thc)}</span> / <span class="cbd">${rangeText(active.cbd)}</span> mg</span>
         <span class="muted">day: ${rangeText(runningThc)} / ${rangeText(runningCbd)} mg</span>
       </div>
-      ${scores ? `<div class="muted">${scores}</div>` : ""}
-      ${entry.effects.length ? `<div class="row">${effectChips(entry.effects)}</div>` : ""}
-      ${entry.note ? `<div>📝 ${esc(entry.note)}</div>` : ""}
+      ${details}
     </div>`;
   });
 
@@ -286,6 +304,19 @@ function weekUsageCard(byDay, thisWeek) {
       ${row("use-free days", thisFree, prevFree, trendSpan(thisFree, prevFree, true, 1))}
       <p class="muted">THC:CBD this week ${ratioText(thisWeek.thc[1], thisWeek.cbd[1])}. Median ignores a single heavy day.</p>
     </div>`;
+}
+
+/** Watch tag counts now vs before. More is worse, except resisted urges. */
+function watchRows(now, before) {
+  const tags = new Set([...Object.keys(now), ...Object.keys(before)]);
+  return [...tags]
+    .map((tag) => ({ tag, now: now[tag] ?? 0, before: before[tag] ?? 0 }))
+    .sort((a, b) => b.now - a.now)
+    .map((w) => {
+      const span = trendSpan(w.now, w.before, w.tag === RESISTED_TAG, 1);
+      return `<div class="row spread"><span class="chip watch">${esc(w.tag)}</span><span>${w.now}× ${span} <span class="muted">(prev ${w.before})</span></span></div>`;
+    })
+    .join("");
 }
 
 function renderWeek() {
@@ -364,6 +395,8 @@ function renderWeek() {
     ${weekUsageCard(byDay, thisWeek)}
     <h2>Effects</h2>
     <div class="card">${effectRows.join("") || `<span class="muted">none logged</span>`}</div>
+    <h2>Watch</h2>
+    <div class="card">${watchRows(thisWeek.watch, prevWeek.watch) || `<span class="muted">none logged</span>`}</div>
     <h2>Notes</h2>
     <div class="card">${notes.join("") || `<span class="muted">none</span>`}</div>`;
 }
@@ -383,7 +416,17 @@ function usageCard(byDay) {
     <div class="row spread"><span>THC trend (4 weeks)</span><span class="${rate.direction}"><b>${rateWords[rate.direction]}</b> ${sign}${round1(rate.perWeek)} mg/day per week</span></div>
     <div class="row spread"><span>Last 7 days, mean</span><span><b>${round1(mean(last7))}</b> mg/day ${usageSpan(mean(last7), mean(prev7))} <span class="muted">(prev ${round1(mean(prev7))})</span></span></div>
     <div class="row spread"><span>Use-free days</span><span><b>${freeLast7}</b> ${trendSpan(freeLast7, freePrev7, true, 1)} <span class="muted">(prev ${freePrev7})</span></span></div>
+    ${watchLast7VsPrev7(today)}
   </div>`;
+}
+
+/** Watch tags in the last 7 days vs the 7 before. Empty if none were logged in either. */
+function watchLast7VsPrev7(today) {
+  const last7 = summarize(entriesBetween(state.entries, addDays(today, -6), today), chartMode()).watch;
+  const prev7 = summarize(entriesBetween(state.entries, addDays(today, -13), addDays(today, -7)), chartMode()).watch;
+  const rows = watchRows(last7, prev7);
+  if (!rows) return "";
+  return `<p class="muted">Watch, last 7 days</p>${rows}`;
 }
 
 /** Daily THC from the first entry (or range start) to today, so the smoothed trend is warmed up before the range starts. */
@@ -408,6 +451,8 @@ function renderTrends() {
   const cbd = days.map((d) => (d.count ? d.cbd[1] : null));
   const share = days.map((d) => thcShare(d.thc[1], d.cbd[1]));
   const thcTrend = smoothedThc(byDay, keys);
+  const watchCounts = days.map((d) => Object.values(d.watch).reduce((sum, n) => sum + n, 0));
+  const watchMarkers = watchCounts.map((count) => (count > 0 ? MARKER_HEIGHT : null));
   const limit = dailyLimit();
   const limitLine = keys.map(() => limit);
   const symptoms = state.settings.symptoms;
@@ -447,10 +492,15 @@ function renderTrends() {
     const index = u.cursor.idx;
     if (index == null) return;
     const key = keys[index];
-    const notes = (byDay[key] ?? []).filter((e) => e.note);
+    const withText = (byDay[key] ?? []).filter((e) => e.note || e.watch?.length);
     $("#notes-day").textContent = dayStart(key).toDateString();
     $("#notes-list").innerHTML =
-      notes.map((e) => `<div>${esc(e.strain.name)}: ${esc(e.note)}</div>`).join("") || `<span class="muted">no notes</span>`;
+      withText
+        .map((e) => {
+          const label = isDose(e) ? esc(e.strain.name) : "no dose";
+          return `<div>${label}: ${watchChips(e.watch)} ${esc(e.note)}</div>`;
+        })
+        .join("") || `<span class="muted">no notes</span>`;
   };
   const cursor = { sync: { key: "cannalog" } };
   const hooks = { setCursor: [showNotes] };
@@ -460,9 +510,19 @@ function renderTrends() {
     { label: "THC", stroke: color("--thc"), fill: color("--thc"), paths: bars(-1), points: { show: false } },
     { label: "CBD", stroke: color("--cbd"), fill: color("--cbd"), paths: bars(1), points: { show: false } },
     { label: "THC trend", stroke: color("--text"), width: 3, points: { show: false } },
-    { label: "THC %", stroke: "#f08c00", scale: "share", width: 2, spanGaps: true },
+    { label: "THC %", stroke: "#7048e8", scale: "share", width: 2, spanGaps: true },
+    {
+      // Markers along the top on days with watch tags (cravings etc.). Legend shows the day's count.
+      label: "watch",
+      scale: "marker",
+      stroke: color("--watch"),
+      fill: color("--watch"),
+      paths: () => null,
+      points: { show: true, size: 14, fill: color("--watch") },
+      value: (_chart, _raw, _seriesIndex, index) => (index == null ? "–" : `${watchCounts[index]}×`),
+    },
   ];
-  const mgData = [x, thc, cbd, thcTrend, share];
+  const mgData = [x, thc, cbd, thcTrend, share, watchMarkers];
   if (limit !== null) {
     mgSeries.push({ label: "ceiling", stroke: color("--bad"), dash: [8, 6], width: 2, points: { show: false } });
     mgData.push(limitLine);
@@ -475,7 +535,7 @@ function renderTrends() {
         height: 280,
         cursor,
         hooks,
-        scales: { x: { time: true }, share: { range: [0, 100] } },
+        scales: { x: { time: true }, share: { range: [0, 100] }, marker: { range: [0, 1] } },
         axes: [axis, { ...axis, label: "mg" }, { ...axis, scale: "share", side: 1, grid: { show: false }, label: "THC %" }],
         series: mgSeries,
       },
@@ -568,6 +628,16 @@ function renderSettings() {
       </form>
     </div>
 
+    <h2>Watch tags <span class="muted">(cravings etc., tap to remove)</span></h2>
+    <div class="card"><div class="row">${watchTagsOf(settings)
+      .map((t, i) => `<button class="chip watch" aria-pressed="true" data-watch-remove="${i}">${esc(t.tag)} ✕</button>`)
+      .join(" ")}</div>
+      <form class="row" id="watch-form" style="flex-wrap:nowrap; margin-top:8px">
+        <input name="watchTag" placeholder="new watch tag" required />
+        <button>Add</button>
+      </form>
+    </div>
+
     <h2>Backup</h2>
     <div class="card">
       <div class="row">
@@ -589,15 +659,148 @@ function renderSettings() {
   });
 }
 
+// ---------- dose calculator ----------
+
+// Last calculator inputs, kept so switching tabs does not wipe them.
+let calcInputs = { strainA: "", strainB: "", thcMg: "", ratio: "" };
+let calcPlan = []; // [{ strain, amount }] from the last successful calculation, for "Log this"
+
+function roundToStep(strain, amount) {
+  const step = FORMS[strain.form].step;
+  const steps = Math.round(amount / step);
+  return Number((steps * step).toFixed(2)); // toFixed drops float noise like 0.35000000000000003
+}
+
+function amountLabel(strain, amount) {
+  return `${roundToStep(strain, amount)} ${FORMS[strain.form].amountUnit} ${esc(strain.name)}`;
+}
+
+function renderCalc() {
+  const options = (selected, allowNone) => {
+    const none = allowNone ? `<option value="">— none —</option>` : "";
+    const list = state.strains.map((s) => `<option value="${s.id}" ${s.id === selected ? "selected" : ""}>${esc(s.name)}</option>`);
+    return none + list.join("");
+  };
+  $("#view-calc").innerHTML = `
+    <h2>Dose calculator</h2>
+    <form class="card" id="calc-form">
+      <label class="field"><span>Product</span><select name="strainA">${options(calcInputs.strainA, false)}</select></label>
+      <label class="field"><span>Mix with (optional, to set the THC:CBD ratio)</span><select name="strainB">${options(calcInputs.strainB, true)}</select></label>
+      <div class="row" style="flex-wrap: nowrap">
+        <label class="field" style="flex: 1"><span>THC mg</span><input name="thcMg" type="number" inputmode="decimal" step="any" min="0" value="${esc(calcInputs.thcMg)}" /></label>
+        <label class="field" style="flex: 1"><span>THC:CBD = x : 1</span><input name="ratio" type="number" inputmode="decimal" step="any" min="0" placeholder="optional" value="${esc(calcInputs.ratio)}" /></label>
+      </div>
+    </form>
+    <div class="card" id="calc-result"></div>
+    <p class="muted">mg ${esc(CALC_MODES[chartMode()])}. Amounts rounded to what you can measure. A calculator, not a recommendation.</p>`;
+  updateCalcResult();
+}
+
+function updateCalcResult() {
+  const form = $("#calc-form");
+  if (!form) return;
+  calcInputs = { strainA: form.strainA.value, strainB: form.strainB.value, thcMg: form.thcMg.value, ratio: form.ratio.value };
+  calcPlan = [];
+  $("#calc-result").innerHTML = calcResultHtml();
+}
+
+/** THC/CBD mg the rounded amounts in calcPlan really contain (can differ slightly from the target). */
+function planTotalsText() {
+  let thc = 0;
+  let cbd = 0;
+  for (const part of calcPlan) {
+    const perUnit = mgPerUnit(part.strain, chartMode());
+    thc += perUnit.thc * part.amount;
+    cbd += perUnit.cbd * part.amount;
+  }
+  return `→ ${round1(thc)} mg THC · ${round1(cbd)} mg CBD (${ratioText(thc, cbd)})`;
+}
+
+/** Text for the result card. Also fills calcPlan when there is something to log. */
+function calcResultHtml() {
+  const strainA = strainById(calcInputs.strainA);
+  const strainB = strainById(calcInputs.strainB);
+  const thcMg = Number(calcInputs.thcMg);
+  const ratio = Number(calcInputs.ratio);
+  if (!strainA) return `<span class="muted">Add a strain / product in Settings first.</span>`;
+  if (!(thcMg > 0)) return `<span class="muted">Enter how many mg THC.</span>`;
+
+  // One product, or no ratio wanted: the ratio is whatever the product has.
+  if (!strainB || !(ratio > 0)) {
+    const amount = amountForThc(strainA, thcMg, chartMode());
+    calcPlan = [{ strain: strainA, amount: roundToStep(strainA, amount) }];
+    const hint = ratio > 0 ? `<p class="muted">Pick a second product to change the ratio.</p>` : "";
+    return `<div class="big">${amountLabel(strainA, amount)}</div>
+      <div>${planTotalsText()}</div>
+      ${hint}<button type="button" class="primary" id="calc-log">Log this</button>`;
+  }
+
+  const mix = mixForTarget(strainA, strainB, thcMg, ratio, chartMode());
+  if (mix.error) {
+    const [a, b] = mix.reachable;
+    return `<div class="worse">${esc(mix.error)}</div>
+      <div class="muted">Possible with these two: between ${ratioText(a.thc, a.cbd)} and ${ratioText(b.thc, b.cbd)}.</div>`;
+  }
+  calcPlan = [
+    { strain: strainA, amount: roundToStep(strainA, mix.amountA) },
+    { strain: strainB, amount: roundToStep(strainB, mix.amountB) },
+  ].filter((part) => part.amount > 0);
+  return `<div class="big">${amountLabel(strainA, mix.amountA)}</div>
+    <div class="big">+ ${amountLabel(strainB, mix.amountB)}</div>
+    <div>${planTotalsText()}</div>
+    <button type="button" class="primary" id="calc-log">Log this</button>`;
+}
+
+/** Log the calculated amounts as entries now (one per product). Undo-able; edit them on the Day view. */
+function logCalcPlan() {
+  const now = new Date().toISOString();
+  const added = calcPlan.map((part) => ({
+    id: newId(),
+    t: now,
+    strain: { ...part.strain },
+    amount: part.amount,
+    route: FORMS[part.strain.form].defaultRoute,
+    note: "",
+    scores: {},
+    effects: [],
+    watch: [],
+  }));
+  for (const entry of added) validateEntry(entry);
+  state.entries.push(...added);
+  shownDay = dayKey(now);
+  view = "day";
+  commit();
+  toast(`Logged ${added.length} ${added.length === 1 ? "entry" : "entries"}`, () => {
+    const addedIds = new Set(added.map((e) => e.id));
+    state.entries = state.entries.filter((e) => !addedIds.has(e.id));
+    commit();
+  });
+}
+
 // ---------- entry dialog ----------
 
 let editingEntry = null; // the entry being edited, or null for a new one
 let draftScores = {};
 let draftEffects = [];
+let draftWatch = []; // watch tag names
+
+/** Dose fields only make sense when something was taken. */
+function isNoDoseChecked() {
+  return $("#entry-form").noDose.checked;
+}
+
+function updateDoseFields() {
+  const form = $("#entry-form");
+  const noDose = isNoDoseChecked();
+  $("#dose-fields").hidden = noDose;
+  form.amount.required = !noDose; // hidden required fields would block saving
+  updateEntryPreview();
+}
 
 function strainsByLastUse() {
   const lastUse = {};
   for (const entry of state.entries) {
+    if (!isDose(entry)) continue;
     const id = entry.strain.id;
     if (!lastUse[id] || entry.t > lastUse[id]) lastUse[id] = entry.t;
   }
@@ -610,7 +813,7 @@ function strainsByLastUse() {
  */
 function selectedStrain() {
   const id = $("#entry-form").strainId.value;
-  if (editingEntry && editingEntry.strain.id === id) return editingEntry.strain;
+  if (editingEntry?.strain && editingEntry.strain.id === id) return editingEntry.strain;
   return strainById(id);
 }
 
@@ -625,33 +828,37 @@ function defaultEntryTime() {
 }
 
 function openEntryDialog(entry) {
-  if (!state.strains.length && !entry) {
-    alert("Add a strain or product first.");
-    openStrainDialog(null);
-    return;
-  }
   const form = $("#entry-form");
   editingEntry = entry;
   draftScores = { ...(entry?.scores ?? {}) };
   draftEffects = [...(entry?.effects ?? [])];
+  draftWatch = [...(entry?.watch ?? [])];
+  // No products yet: only a no-dose entry (craving, event) is possible.
+  form.noDose.checked = (entry && !isDose(entry)) || state.strains.length === 0;
 
   const options = strainsByLastUse().map((s) => `<option value="${s.id}">${esc(s.name)}</option>`);
   // The entry's strain may have been deleted since; keep it selectable from the snapshot.
-  if (entry && !strainById(entry.strain.id)) {
+  if (entry?.strain && !strainById(entry.strain.id)) {
     options.unshift(`<option value="${entry.strain.id}">${esc(entry.strain.name)} (deleted)</option>`);
   }
   form.strainId.innerHTML = options.join("");
-  if (entry) form.strainId.value = entry.strain.id;
+  if (entry?.strain) form.strainId.value = entry.strain.id;
 
   form.amount.value = entry?.amount ?? "";
-  form.route.value = entry?.route ?? FORMS[selectedStrain().form].defaultRoute;
+  form.route.value = entry?.route ?? defaultRoute();
   form.time.value = localInputTime(entry ? new Date(entry.t) : defaultEntryTime());
   form.note.value = entry?.note ?? "";
   $("#entry-title").textContent = entry ? "Edit entry" : "New entry";
   $("#entry-delete").hidden = !entry;
   renderEntryChoices();
-  updateEntryPreview();
+  updateDoseFields();
   $("#entry-dialog").showModal();
+}
+
+function defaultRoute() {
+  const strain = selectedStrain();
+  if (!strain) return "inhaled";
+  return FORMS[strain.form].defaultRoute;
 }
 
 function renderEntryChoices() {
@@ -677,27 +884,42 @@ function renderEntryChoices() {
       return `<button type="button" class="chip ${t.good ? "good" : "bad"}" data-effect="${esc(t.tag)}" aria-pressed="${pressed}">${sign} ${esc(t.tag)}</button>`;
     })
     .join(" ");
+
+  $("#entry-watch").innerHTML = watchTagsOf(state.settings)
+    .map((t) => {
+      const pressed = draftWatch.includes(t.tag);
+      return `<button type="button" class="chip watch" data-watch="${esc(t.tag)}" aria-pressed="${pressed}">${esc(t.tag)}</button>`;
+    })
+    .join(" ");
 }
 
 function readEntryForm() {
   const form = $("#entry-form");
-  return {
+  const common = {
     id: editingEntry?.id ?? newId(),
     t: new Date(form.time.value).toISOString(),
-    strain: { ...selectedStrain() }, // copy: the entry keeps the label values it was logged with
-    amount: Number(form.amount.value),
-    route: form.route.value,
     note: form.note.value.trim(),
     scores: { ...draftScores },
     effects: [...draftEffects],
+    watch: [...draftWatch],
+  };
+  if (isNoDoseChecked()) return { ...common, noDose: true };
+  const strain = selectedStrain();
+  if (!strain) throw new Error("Pick a strain / product, or tick 'No dose'.");
+  return {
+    ...common,
+    strain: { ...strain }, // copy: the entry keeps the label values it was logged with
+    amount: Number(form.amount.value),
+    route: form.route.value,
   };
 }
 
 function updateEntryPreview() {
   const form = $("#entry-form");
-  $("#amount-label").textContent = `Amount (${FORMS[selectedStrain().form].amountUnit})`;
+  const strain = selectedStrain();
+  if (strain) $("#amount-label").textContent = `Amount (${FORMS[strain.form].amountUnit})`;
   const amount = Number(form.amount.value);
-  if (!(amount > 0) || !form.time.value) {
+  if (isNoDoseChecked() || !strain || !(amount > 0) || !form.time.value) {
     $("#entry-preview").textContent = "";
     return;
   }
@@ -804,9 +1026,13 @@ function onViewClick(event) {
     view = "day";
   } else if (data.symptomRemove) state.settings.symptoms.splice(Number(data.symptomRemove), 1);
   else if (data.tagRemove) state.settings.effectTags.splice(Number(data.tagRemove), 1);
-  else if (data.id) return openEntryDialog(state.entries.find((e) => e.id === data.id));
+  else if (data.watchRemove) {
+    state.settings.watchTags = watchTagsOf(state.settings); // older data: start from the defaults
+    state.settings.watchTags.splice(Number(data.watchRemove), 1);
+  } else if (data.id) return openEntryDialog(state.entries.find((e) => e.id === data.id));
   else if (data.strain) return openStrainDialog(strainById(data.strain));
   else if (target.id === "strain-add") return openStrainDialog(null);
+  else if (target.id === "calc-log") return logCalcPlan();
   else if (target.id === "export-json") return download(`cannalog-${dayKey(new Date())}.json`, toJson(state), "application/json");
   else if (target.id === "export-csv") return download(`cannalog-${dayKey(new Date())}.csv`, toCsv(state), "text/csv");
   else if (target.id === "import-button") return $("#import-file").click();
@@ -844,6 +1070,12 @@ function onViewSubmit(event) {
     else if (limit > 0) state.settings.dailyLimitMg = limit;
     else return alert(`Ceiling ${text} must be a number > 0, or empty for off`);
   }
+  if (form.id === "watch-form") {
+    const tag = form.watchTag.value.trim();
+    state.settings.watchTags = watchTagsOf(state.settings); // older data: start from the defaults
+    if (state.settings.watchTags.some((t) => t.tag === tag)) return alert(`"${tag}" already exists`);
+    state.settings.watchTags.push({ tag });
+  }
   if (form.id === "tag-form") {
     const tag = form.tag.value.trim();
     if (state.settings.effectTags.some((t) => t.tag === tag)) return alert(`"${tag}" already exists`);
@@ -854,9 +1086,13 @@ function onViewSubmit(event) {
 
 /** Score buttons and effect chips in the entry dialog. */
 function onEntryChoiceClick(event) {
-  const button = event.target.closest("button[data-score], button[data-effect]");
+  const button = event.target.closest("button[data-score], button[data-effect], button[data-watch]");
   if (!button) return;
-  const { score, value, effect } = button.dataset;
+  const { score, value, effect, watch } = button.dataset;
+  if (watch) {
+    if (draftWatch.includes(watch)) draftWatch = draftWatch.filter((tag) => tag !== watch);
+    else draftWatch.push(watch);
+  }
   if (score) {
     if (draftScores[score] === Number(value)) delete draftScores[score];
     else draftScores[score] = Number(value);
@@ -888,14 +1124,18 @@ function wireEvents() {
   main.addEventListener("click", onViewClick);
   main.addEventListener("change", onViewChange);
   main.addEventListener("submit", onViewSubmit);
+  main.addEventListener("input", (event) => {
+    if (event.target.closest("#calc-form")) updateCalcResult();
+  });
 
   const entryForm = $("#entry-form");
   entryForm.addEventListener("click", onEntryChoiceClick);
   entryForm.addEventListener("input", updateEntryPreview);
   entryForm.strainId.addEventListener("change", () => {
-    entryForm.route.value = FORMS[selectedStrain().form].defaultRoute;
+    entryForm.route.value = defaultRoute();
     updateEntryPreview();
   });
+  entryForm.noDose.addEventListener("change", updateDoseFields);
   onDialogSave(entryForm, saveEntryFromDialog);
   $("#entry-delete").onclick = () => {
     $("#entry-dialog").close();

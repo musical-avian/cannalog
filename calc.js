@@ -38,6 +38,7 @@ export const CALC_MODES = {
  * flower: amount in mg × percent. oil: amount in ml × mg/ml. edible: amount in units × mg/unit.
  */
 export function productMg(entry) {
+  if (!isDose(entry)) return { thc: 0, cbd: 0 }; // craving / event entry: nothing taken
   const strain = entry.strain;
   if (strain.form === "flower") {
     return { thc: (entry.amount * strain.thc) / 100, cbd: (entry.amount * strain.cbd) / 100 };
@@ -51,6 +52,7 @@ export function productMg(entry) {
  * raw and decarb give low === high; absorbed gives a real range.
  */
 export function activeMg(entry, mode) {
+  if (!isDose(entry)) return { thc: [0, 0], cbd: [0, 0] };
   const product = productMg(entry);
   if (mode === "raw") {
     return { thc: [product.thc, product.thc], cbd: [product.cbd, product.cbd] };
@@ -74,6 +76,11 @@ export function activeMg(entry, mode) {
   }
 
   throw new Error(`Unknown calc mode "${mode}". Use one of: ${Object.keys(CALC_MODES).join(", ")}`);
+}
+
+/** false for entries logged without a dose (craving, event). Older entries have no flag = dose. */
+export function isDose(entry) {
+  return entry.noDose !== true;
 }
 
 /** "2:1", "1:3", "THC only", "CBD only" or "–". */
@@ -147,11 +154,14 @@ export function dayRange(firstKey, lastKey) {
  * { count, thc: [low, high], cbd: [low, high], scores: { name: average }, effects: { tag: { count, good } } }
  */
 export function summarize(entries, mode) {
-  const summary = { count: entries.length, thc: [0, 0], cbd: [0, 0], scores: {}, effects: {} };
+  // count = number of doses (events without a dose are not "uses"). watch = { tag: count }.
+  const summary = { count: 0, thc: [0, 0], cbd: [0, 0], scores: {}, effects: {}, watch: {} };
   const scoreSums = {};
   const scoreCounts = {};
 
   for (const entry of entries) {
+    if (isDose(entry)) summary.count += 1;
+    for (const tag of entry.watch ?? []) summary.watch[tag] = (summary.watch[tag] ?? 0) + 1;
     const active = activeMg(entry, mode);
     summary.thc[0] += active.thc[0];
     summary.thc[1] += active.thc[1];
@@ -320,7 +330,8 @@ export function median(values) {
 
 /** Number of days in `keys` with no entries. */
 export function useFreeDays(keys, byDay) {
-  return keys.filter((key) => !(byDay[key]?.length > 0)).length;
+  const hasDose = (key) => (byDay[key] ?? []).some(isDose);
+  return keys.filter((key) => !hasDose(key)).length;
 }
 
 // Below 0.1 mg the difference is rounding noise (values are shown to 0.1 mg).
@@ -333,4 +344,50 @@ const MIN_MG_CHANGE = 0.1;
 export function usageChange(now, before) {
   const smallestRealChange = Math.max(STABLE_RATE_FRACTION * before, MIN_MG_CHANGE);
   return trend(now, before, false, smallestRealChange);
+}
+
+// ---------- dose calculator ----------
+
+/**
+ * mg THC and CBD in one unit of the product (1 mg flower, 1 ml oil, 1 edible).
+ * raw = label value; decarb (and absorbed, which the calculator treats as decarb, D5) applies the acid factor.
+ */
+export function mgPerUnit(strain, mode) {
+  const perUnitOnLabel = strain.form === "flower" ? 1 / 100 : 1; // flower label is %, others are mg per unit
+  let factor = 1;
+  if (mode !== "raw" && strain.acid) factor = DECARB_FACTOR;
+  return { thc: strain.thc * perUnitOnLabel * factor, cbd: strain.cbd * perUnitOnLabel * factor };
+}
+
+/** Amount of one product (in its own unit) that contains `thcMg` THC. */
+export function amountForThc(strain, thcMg, mode) {
+  const perUnit = mgPerUnit(strain, mode);
+  if (perUnit.thc <= 0) throw new Error(`"${strain.name}" has no THC on its label, so it cannot give ${thcMg} mg THC`);
+  return thcMg / perUnit.thc;
+}
+
+// Two products with ratios closer than this cannot be mixed to a different ratio (division by ~0).
+const SAME_RATIO_TOLERANCE = 1e-9;
+
+/**
+ * Mix two products to get `thcMg` THC at THC:CBD = ratio : 1.
+ * Solves  a·thcA + b·thcB = T  and  a·cbdA + b·cbdB = T / ratio  for amounts a, b.
+ * Returns { amountA, amountB, thc, cbd } or { error, reachable: [perUnitA, perUnitB] }
+ * (reachable = each product's own THC/CBD per unit: every mix lies between those two ratios).
+ */
+export function mixForTarget(strainA, strainB, thcMg, ratio, mode) {
+  const a = mgPerUnit(strainA, mode);
+  const b = mgPerUnit(strainB, mode);
+  const reachable = [a, b];
+  const cbdMg = thcMg / ratio;
+  const determinant = a.thc * b.cbd - b.thc * a.cbd;
+  if (Math.abs(determinant) < SAME_RATIO_TOLERANCE) {
+    return { error: "Both products have the same THC:CBD ratio, so mixing them cannot change it.", reachable };
+  }
+  const amountA = (thcMg * b.cbd - b.thc * cbdMg) / determinant;
+  const amountB = (a.thc * cbdMg - thcMg * a.cbd) / determinant;
+  if (amountA < 0 || amountB < 0) {
+    return { error: `${ratioText(ratio, 1)} is outside what these two products can make.`, reachable };
+  }
+  return { amountA, amountB, thc: thcMg, cbd: cbdMg };
 }

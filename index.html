@@ -23,6 +23,8 @@
         --bad: #c92a2a;
         --good-bg: #d3f9d8;
         --bad-bg: #ffe3e3;
+        --watch: #d9480f; /* addiction-related tags */
+        --watch-bg: #fff4e6;
         --on-accent: #ffffff; /* text on accent-colored buttons */
         color-scheme: light;
       }
@@ -41,6 +43,8 @@
           --bad: #ff8787;
           --good-bg: #1f3a24;
           --bad-bg: #44201f;
+          --watch: #ffa94d;
+          --watch-bg: #3b2610;
           --on-accent: #121513;
           color-scheme: dark;
         }
@@ -58,6 +62,8 @@
         --bad: #ff8787;
         --good-bg: #1f3a24;
         --bad-bg: #44201f;
+        --watch: #ffa94d;
+        --watch-bg: #3b2610;
         --on-accent: #121513;
         color-scheme: dark;
       }
@@ -91,8 +97,10 @@
       .chip { display: inline-block; border-radius: 999px; padding: 4px 12px; font-size: 0.95rem; border: 1px solid var(--line); }
       .chip.good { background: var(--good-bg); color: var(--good); border-color: transparent; }
       .chip.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
+      .chip.watch { background: var(--watch-bg); color: var(--watch); border-color: transparent; }
+      .card.no-dose { border-left: 6px solid var(--watch); }
       button.chip { min-height: 44px; padding: 6px 14px; background: var(--panel); }
-      button.chip.good[aria-pressed="false"], button.chip.bad[aria-pressed="false"] { background: var(--panel); color: var(--muted); border-color: var(--line); }
+      button.chip.good[aria-pressed="false"], button.chip.bad[aria-pressed="false"], button.chip.watch[aria-pressed="false"] { background: var(--panel); color: var(--muted); border-color: var(--line); }
       .scores { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; } /* 0–5 and 6–10: two rows, big enough to tap */
       .scores button { padding: 0; min-height: 48px; min-width: 0; font-size: 1rem; }
       .scores button[aria-pressed="true"] { outline: 2px solid var(--text); font-weight: 700; }
@@ -127,6 +135,7 @@
       <section id="view-day"></section>
       <section id="view-week" hidden></section>
       <section id="view-trends" hidden></section>
+      <section id="view-calc" hidden></section>
       <section id="view-settings" hidden></section>
       <p class="muted">Personal log, not medical or dosing advice. Data stays on this device until you export it.</p>
     </main>
@@ -137,22 +146,28 @@
       <button type="button" data-view="day" aria-current="page">Day</button>
       <button type="button" data-view="week">Week</button>
       <button type="button" data-view="trends">Trends</button>
+      <button type="button" data-view="calc">Calc</button>
       <button type="button" data-view="settings">Settings</button>
     </nav>
 
     <dialog id="entry-dialog">
       <form id="entry-form" method="dialog">
         <div class="row spread"><h2 id="entry-title">New entry</h2><button type="submit" value="cancel" formnovalidate>✕</button></div>
-        <label class="field"><span>Strain / product</span><select name="strainId" required></select></label>
-        <div class="row" style="flex-wrap: nowrap">
-          <label class="field" style="flex: 1"><span id="amount-label">Amount</span><input name="amount" type="number" inputmode="decimal" step="any" min="0" required /></label>
-          <label class="field" style="flex: 1"><span>Route</span><select name="route"><option value="inhaled">inhaled</option><option value="oral">oral</option></select></label>
+        <label class="row"><input name="noDose" type="checkbox" /> No dose (craving / event only)</label>
+        <div id="dose-fields">
+          <label class="field"><span>Strain / product</span><select name="strainId"></select></label>
+          <div class="row" style="flex-wrap: nowrap">
+            <label class="field" style="flex: 1"><span id="amount-label">Amount</span><input name="amount" type="number" inputmode="decimal" step="any" min="0" /></label>
+            <label class="field" style="flex: 1"><span>Route</span><select name="route"><option value="inhaled">inhaled</option><option value="oral">oral</option></select></label>
+          </div>
         </div>
         <label class="field"><span>Time</span><input name="time" type="datetime-local" required /></label>
         <p class="muted" id="entry-preview"></p>
         <div id="entry-scores"></div>
         <h2>Effects</h2>
         <div class="row" id="entry-effects"></div>
+        <h2>Watch <span class="muted">(cravings, coping, more than planned…)</span></h2>
+        <div class="row" id="entry-watch"></div>
         <label class="field"><span>Note (mood, situation, anything)</span><textarea name="note" rows="2"></textarea></label>
         <div class="row spread">
           <button type="button" class="danger" id="entry-delete">Delete</button>

@@ -13,6 +13,7 @@ Stored in `localStorage["cannalog.v1"]` as JSON. Same shape in the JSON backup. 
     dailyLimitMg: 30,                    // optional personal THC ceiling, null/missing = off
     symptoms: [{ name: "mood", higherIsBetter: true }],
     effectTags: [{ tag: "relaxed", good: true }],
+    watchTags: [{ tag: "craving" }],      // optional, missing = defaults
   },
 }
 
@@ -34,7 +35,11 @@ Entry = {
   note: "text",
   scores: { mood: 6, pain: 3 },    // 0–10, only rated symptoms
   effects: [{ tag: "dry mouth", good: false }],
+  watch: ["craving"],              // optional, watch tag names
 }
+
+// Entry without dose (craving, event): no strain/amount/route; needs a watch tag or a note.
+NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 ```
 
 ## Backup

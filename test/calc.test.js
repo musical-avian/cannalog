@@ -3,13 +3,16 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   activeMg,
+  amountForThc,
   DECARB_FACTOR,
   dailyThcSeries,
   dayRange,
   goodness,
   groupByDay,
+  isDose,
   mean,
   median,
+  mixForTarget,
   productMg,
   ratioText,
   rollingAverage,
@@ -152,4 +155,44 @@ test("usage change: less is better, tiny changes are the same", () => {
   assert.equal(usageChange(10.2, 10), "same");
   assert.equal(usageChange(0, 0), "same");
   assert.equal(usageChange(1, 0), "worse");
+});
+
+test("calculator: single product amount round-trips through productMg", () => {
+  const flower = { id: "f", name: "Flower", form: "flower", thc: 20, cbd: 1, acid: false };
+  const amount = amountForThc(flower, 15, "decarb");
+  assert.ok(Math.abs(amount - 75) < 1e-9); // 75 mg × 20% = 15 mg
+  const roundTrip = productMg({ strain: flower, amount }).thc;
+  assert.ok(Math.abs(roundTrip - 15) < 1e-9);
+  const acid = { ...flower, acid: true };
+  assert.ok(amountForThc(acid, 15, "decarb") > amountForThc(acid, 15, "raw")); // decarb loses mass → need more
+  assert.throws(() => amountForThc({ ...flower, thc: 0 }, 5, "raw"), /has no THC/);
+});
+
+test("calculator: mixing two products hits THC and ratio exactly", () => {
+  const flower = { id: "f", name: "Flower", form: "flower", thc: 20, cbd: 1, acid: false };
+  const oil = { id: "o", name: "Oil", form: "oil", thc: 10, cbd: 10, acid: false };
+  const mix = mixForTarget(flower, oil, 20, 2, "decarb"); // 20 mg THC, 10 mg CBD
+  const thc = productMg({ strain: flower, amount: mix.amountA }).thc + productMg({ strain: oil, amount: mix.amountB }).thc;
+  const cbd = productMg({ strain: flower, amount: mix.amountA }).cbd + productMg({ strain: oil, amount: mix.amountB }).cbd;
+  assert.ok(Math.abs(thc - 20) < 1e-9 && Math.abs(cbd - 10) < 1e-9);
+  assert.match(mixForTarget(flower, oil, 20, 50, "decarb").error, /outside/); // 50:1 > flower's 20:1
+  assert.match(mixForTarget(oil, { ...oil, id: "o2" }, 20, 2, "decarb").error, /same THC:CBD ratio/);
+});
+
+test("no-dose entries add no mg, are not uses, keep watch tags, don't break use-free days", () => {
+  const craving = {
+    id: "c",
+    t: new Date(2026, 9, 18, 12).toISOString(),
+    noDose: true,
+    note: "",
+    scores: {},
+    effects: [],
+    watch: ["craving"],
+  };
+  const s = summarize([craving], "decarb");
+  assert.deepEqual(s.thc, [0, 0]);
+  assert.equal(s.count, 0);
+  assert.deepEqual(s.watch, { craving: 1 });
+  assert.equal(isDose(craving), false);
+  assert.equal(useFreeDays(["2026-10-18"], groupByDay([craving])), 1);
 });
