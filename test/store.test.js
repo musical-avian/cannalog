@@ -109,3 +109,25 @@ test("no-dose entry: valid without product, needs a watch tag or note; old data 
   craving.watch = [];
   assert.throws(() => validate(s), /entry c1: entry without dose needs a watch tag or a note/);
 });
+
+test("anxiety: added once to older settings, stays deleted if removed", () => {
+  const storage = memoryStorage();
+  const old = sample();
+  old.settings.symptoms = old.settings.symptoms.filter((s) => s.name !== "anxiety");
+  delete old.settings.symptomsVersion;
+  storage.setItem("cannalog.v1", JSON.stringify(old));
+  const upgraded = load(storage);
+  assert.ok(upgraded.settings.symptoms.some((s) => s.name === "anxiety" && s.higherIsBetter === false));
+  upgraded.settings.symptoms = upgraded.settings.symptoms.filter((s) => s.name !== "anxiety");
+  save(upgraded, storage);
+  assert.ok(!load(storage).settings.symptoms.some((s) => s.name === "anxiety"));
+});
+
+test("restore into an empty app keeps the backup's own settings", () => {
+  const backup = sample();
+  backup.settings.symptoms.push({ name: "nausea", higherIsBetter: false });
+  backup.settings.dailyLimitMg = 20;
+  const restored = merge(emptyState(), backup);
+  assert.deepEqual(restored.settings, backup.settings);
+  assert.deepEqual(restored.entries, backup.entries);
+});

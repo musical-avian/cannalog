@@ -4,7 +4,6 @@
 import {
   activeMg,
   addDays,
-  amountForThc,
   CALC_MODES,
   dailyThcSeries,
   dayKey,
@@ -17,7 +16,7 @@ import {
   mean,
   median,
   mgPerUnit,
-  mixForTarget,
+  planForMg,
   RATE_WINDOW_DAYS,
   rangeText,
   ratioText,
@@ -52,6 +51,7 @@ import {
 
 const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
+const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 const TREND_WINDOW_DAYS = 7;
 const SYMPTOM_COLORS = ["#e8590c", "#ae3ec9", "#1098ad", "#f59f00", "#d6336c", "#5c940d"];
 
@@ -147,11 +147,16 @@ function download(filename, text, type) {
     navigator.share({ files: [file] }).catch(() => {}); // user cancelled: nothing to do
     return;
   }
+  // Android Chrome cannot share .json files, so JSON always lands here.
+  // The link must be in the page, and the blob URL must live until the download has started:
+  // revoking it right after click() made the JSON export fail on phones.
   const link = document.createElement("a");
   link.href = URL.createObjectURL(file);
   link.download = filename;
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), DOWNLOAD_URL_LIFETIME_MS);
 }
 
 let undoTimer;
@@ -661,9 +666,15 @@ function renderSettings() {
 
 // ---------- dose calculator ----------
 
-// Last calculator inputs, kept so switching tabs does not wipe them.
-let calcInputs = { strainA: "", strainB: "", thcMg: "", ratio: "" };
+// Calculator inputs, kept so switching tabs does not wipe them.
+let calcPicked = []; // strain ids, at most 2, oldest first
+let calcTouched = false; // until the user picks, preselect the last used product
+let calcThc = "";
+let calcCbd = "";
 let calcPlan = []; // [{ strain, amount }] from the last successful calculation, for "Log this"
+const MAX_CALC_PRODUCTS = 2;
+const THC_PRESETS = [2.5, 5, 10];
+const CBD_PRESETS = [5, 10, 20];
 
 function roundToStep(strain, amount) {
   const step = FORMS[strain.form].step;
@@ -672,24 +683,43 @@ function roundToStep(strain, amount) {
 }
 
 function amountLabel(strain, amount) {
-  return `${roundToStep(strain, amount)} ${FORMS[strain.form].amountUnit} ${esc(strain.name)}`;
+  return `${amount} ${FORMS[strain.form].amountUnit} ${esc(strain.name)}`;
+}
+
+/** Tap a product chip: select it, or unselect if already picked. A 3rd pick replaces the oldest. */
+function toggleCalcProduct(strainId) {
+  calcTouched = true;
+  if (calcPicked.includes(strainId)) {
+    calcPicked = calcPicked.filter((id) => id !== strainId);
+  } else {
+    calcPicked.push(strainId);
+    if (calcPicked.length > MAX_CALC_PRODUCTS) calcPicked.shift();
+  }
+  renderCalc();
 }
 
 function renderCalc() {
-  const options = (selected, allowNone) => {
-    const none = allowNone ? `<option value="">— none —</option>` : "";
-    const list = state.strains.map((s) => `<option value="${s.id}" ${s.id === selected ? "selected" : ""}>${esc(s.name)}</option>`);
-    return none + list.join("");
-  };
+  calcPicked = calcPicked.filter((id) => strainById(id)); // drop products deleted since
+  if (!calcTouched && calcPicked.length === 0 && state.strains.length > 0) calcPicked = [strainsByLastUse()[0].id];
+  const chips = state.strains
+    .map((s) => {
+      const picked = calcPicked.includes(s.id);
+      return `<button type="button" class="chip pick" data-calc-product="${s.id}" aria-pressed="${picked}">${esc(s.name)}</button>`;
+    })
+    .join(" ");
+  const presets = (field, values) =>
+    values.map((mg) => `<button type="button" class="chip" data-calc-${field}="${mg}">${mg}</button>`).join(" ");
   $("#view-calc").innerHTML = `
     <h2>Dose calculator</h2>
+    <p class="muted">Pick 1 product for a THC dose. Pick 2 to also set CBD.</p>
+    <div class="card">
+      <div class="row">${chips || `<span class="muted">Add a strain / product in Settings first.</span>`}</div>
+    </div>
     <form class="card" id="calc-form">
-      <label class="field"><span>Product</span><select name="strainA">${options(calcInputs.strainA, false)}</select></label>
-      <label class="field"><span>Mix with (optional, to set the THC:CBD ratio)</span><select name="strainB">${options(calcInputs.strainB, true)}</select></label>
-      <div class="row" style="flex-wrap: nowrap">
-        <label class="field" style="flex: 1"><span>THC mg</span><input name="thcMg" type="number" inputmode="decimal" step="any" min="0" value="${esc(calcInputs.thcMg)}" /></label>
-        <label class="field" style="flex: 1"><span>THC:CBD = x : 1</span><input name="ratio" type="number" inputmode="decimal" step="any" min="0" placeholder="optional" value="${esc(calcInputs.ratio)}" /></label>
-      </div>
+      <label class="field"><span>THC mg</span><input name="thcMg" type="number" inputmode="decimal" step="any" min="0" value="${esc(calcThc)}" /></label>
+      <div class="row">${presets("thc", THC_PRESETS)}</div>
+      <label class="field"><span>CBD mg ${calcPicked.length === 2 ? "" : "(needs 2 products)"}</span><input name="cbdMg" type="number" inputmode="decimal" step="any" min="0" value="${esc(calcCbd)}" /></label>
+      <div class="row">${presets("cbd", CBD_PRESETS)}</div>
     </form>
     <div class="card" id="calc-result"></div>
     <p class="muted">mg ${esc(CALC_MODES[chartMode()])}. Amounts rounded to what you can measure. A calculator, not a recommendation.</p>`;
@@ -699,9 +729,16 @@ function renderCalc() {
 function updateCalcResult() {
   const form = $("#calc-form");
   if (!form) return;
-  calcInputs = { strainA: form.strainA.value, strainB: form.strainB.value, thcMg: form.thcMg.value, ratio: form.ratio.value };
+  calcThc = form.thcMg.value;
+  calcCbd = form.cbdMg.value;
   calcPlan = [];
-  $("#calc-result").innerHTML = calcResultHtml();
+  try {
+    $("#calc-result").innerHTML = calcResultHtml();
+  } catch (error) {
+    // Never leave the card silently empty (that looked "broken" before).
+    console.error(error);
+    $("#calc-result").innerHTML = `<div class="worse">${esc(error.message)}</div>`;
+  }
 }
 
 /** THC/CBD mg the rounded amounts in calcPlan really contain (can differ slightly from the target). */
@@ -718,37 +755,33 @@ function planTotalsText() {
 
 /** Text for the result card. Also fills calcPlan when there is something to log. */
 function calcResultHtml() {
-  const strainA = strainById(calcInputs.strainA);
-  const strainB = strainById(calcInputs.strainB);
-  const thcMg = Number(calcInputs.thcMg);
-  const ratio = Number(calcInputs.ratio);
-  if (!strainA) return `<span class="muted">Add a strain / product in Settings first.</span>`;
-  if (!(thcMg > 0)) return `<span class="muted">Enter how many mg THC.</span>`;
+  const strains = calcPicked.map(strainById);
+  if (strains.length === 0) return `<span class="muted">Tap a product above.</span>`;
+  const thcMg = calcThc === "" ? 0 : Number(calcThc);
+  const cbdMg = calcCbd === "" ? Number.NaN : Number(calcCbd); // empty CBD with 2 products = not entered yet
+  const cbdForOne = Number.isNaN(cbdMg) ? 0 : cbdMg;
+  const plan = planForMg(strains, thcMg, strains.length === 1 ? cbdForOne : cbdMg, chartMode());
 
-  // One product, or no ratio wanted: the ratio is whatever the product has.
-  if (!strainB || !(ratio > 0)) {
-    const amount = amountForThc(strainA, thcMg, chartMode());
-    calcPlan = [{ strain: strainA, amount: roundToStep(strainA, amount) }];
-    const hint = ratio > 0 ? `<p class="muted">Pick a second product to change the ratio.</p>` : "";
-    return `<div class="big">${amountLabel(strainA, amount)}</div>
-      <div>${planTotalsText()}</div>
-      ${hint}<button type="button" class="primary" id="calc-log">Log this</button>`;
+  if (plan.error) {
+    const possible = plan.possible
+      ? `<div class="muted">These two can make THC:CBD between ${ratioText(plan.possible[0].thc, plan.possible[0].cbd)} and ${ratioText(plan.possible[1].thc, plan.possible[1].cbd)}.</div>`
+      : "";
+    return `<div class="worse">${esc(plan.error)}</div>${possible}`;
   }
-
-  const mix = mixForTarget(strainA, strainB, thcMg, ratio, chartMode());
-  if (mix.error) {
-    const [a, b] = mix.reachable;
-    return `<div class="worse">${esc(mix.error)}</div>
-      <div class="muted">Possible with these two: between ${ratioText(a.thc, a.cbd)} and ${ratioText(b.thc, b.cbd)}.</div>`;
-  }
-  calcPlan = [
-    { strain: strainA, amount: roundToStep(strainA, mix.amountA) },
-    { strain: strainB, amount: roundToStep(strainB, mix.amountB) },
-  ].filter((part) => part.amount > 0);
-  return `<div class="big">${amountLabel(strainA, mix.amountA)}</div>
-    <div class="big">+ ${amountLabel(strainB, mix.amountB)}</div>
+  calcPlan = plan.parts
+    .map((part) => ({ strain: part.strain, amount: roundToStep(part.strain, part.amount) }))
+    .filter((part) => part.amount > 0);
+  if (calcPlan.length === 0) return `<span class="muted">Amount rounds to 0. Enter a larger dose.</span>`;
+  const lines = calcPlan.map((part, i) => `<div class="big">${i > 0 ? "+ " : ""}${amountLabel(part.strain, part.amount)}</div>`);
+  return `${lines.join("")}
     <div>${planTotalsText()}</div>
     <button type="button" class="primary" id="calc-log">Log this</button>`;
+}
+
+/** Preset chip: put the value in the field and recalculate. */
+function setCalcField(name, value) {
+  $("#calc-form")[name].value = value;
+  updateCalcResult();
 }
 
 /** Log the calculated amounts as entries now (one per product). Undo-able; edit them on the Day view. */
@@ -1033,6 +1066,9 @@ function onViewClick(event) {
   else if (data.strain) return openStrainDialog(strainById(data.strain));
   else if (target.id === "strain-add") return openStrainDialog(null);
   else if (target.id === "calc-log") return logCalcPlan();
+  else if (data.calcProduct) return toggleCalcProduct(data.calcProduct);
+  else if (data.calcThc) return setCalcField("thcMg", data.calcThc);
+  else if (data.calcCbd) return setCalcField("cbdMg", data.calcCbd);
   else if (target.id === "export-json") return download(`cannalog-${dayKey(new Date())}.json`, toJson(state), "application/json");
   else if (target.id === "export-csv") return download(`cannalog-${dayKey(new Date())}.csv`, toCsv(state), "text/csv");
   else if (target.id === "import-button") return $("#import-file").click();

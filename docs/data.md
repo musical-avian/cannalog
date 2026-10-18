@@ -11,7 +11,8 @@ Stored in `localStorage["cannalog.v1"]` as JSON. Same shape in the JSON backup. 
     calcMode: "raw" | "decarb" | "absorbed",
     theme: "auto" | "light" | "dark",   // optional, missing = auto (follow phone)
     dailyLimitMg: 30,                    // optional personal THC ceiling, null/missing = off
-    symptoms: [{ name: "mood", higherIsBetter: true }],
+    symptoms: [{ name: "mood", higherIsBetter: true }],  // defaults: mood, pain, ADHD, anxiety
+    symptomsVersion: 2,                  // optional; < 2 → anxiety added once on load
     effectTags: [{ tag: "relaxed", good: true }],
     watchTags: [{ tag: "craving" }],      // optional, missing = defaults
   },
@@ -44,7 +45,7 @@ NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 
 ## Backup
 - **Export JSON**: full state. Phone → share sheet (save to Files/Drive/mail yourself). Desktop → download.
-- **Import JSON**: merges by id, backup wins; settings stay. Broken file → nothing changes, error says why.
+- **Import JSON**: into an empty app (new phone) = exact restore incl. settings. Otherwise merges by id, backup wins; your settings stay. Broken file → nothing changes, error says why.
 - **Export CSV**: one row per entry, product mg + current-mode mg range, one column per symptom.
 
 ## Broken saved data

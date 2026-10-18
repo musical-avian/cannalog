@@ -359,35 +359,52 @@ export function mgPerUnit(strain, mode) {
   return { thc: strain.thc * perUnitOnLabel * factor, cbd: strain.cbd * perUnitOnLabel * factor };
 }
 
-/** Amount of one product (in its own unit) that contains `thcMg` THC. */
-export function amountForThc(strain, thcMg, mode) {
-  const perUnit = mgPerUnit(strain, mode);
-  if (perUnit.thc <= 0) throw new Error(`"${strain.name}" has no THC on its label, so it cannot give ${thcMg} mg THC`);
-  return thcMg / perUnit.thc;
-}
-
 // Two products with ratios closer than this cannot be mixed to a different ratio (division by ~0).
 const SAME_RATIO_TOLERANCE = 1e-9;
 
 /**
- * Mix two products to get `thcMg` THC at THC:CBD = ratio : 1.
- * Solves  a·thcA + b·thcB = T  and  a·cbdA + b·cbdB = T / ratio  for amounts a, b.
- * Returns { amountA, amountB, thc, cbd } or { error, reachable: [perUnitA, perUnitB] }
- * (reachable = each product's own THC/CBD per unit: every mix lies between those two ratios).
+ * Amounts of 1 or 2 products for a target THC mg and CBD mg.
+ * Returns { parts: [{ strain, amount }] } or { error, possible } — never throws on user input.
+ * 1 product: THC sets the amount (or CBD if no THC given); the other compound is what the product has.
+ * 2 products: solves  a·thcA + b·thcB = THC  and  a·cbdA + b·cbdB = CBD.
+ * possible = each product's own { thc, cbd } per unit: every mix's ratio lies between those two.
  */
-export function mixForTarget(strainA, strainB, thcMg, ratio, mode) {
+export function planForMg(strains, thcMg, cbdMg, mode) {
+  if (strains.length === 1) return planOneProduct(strains[0], thcMg, cbdMg, mode);
+  if (strains.length !== 2) return { error: "Pick 1 or 2 products." };
+  if (!(thcMg >= 0 && cbdMg >= 0) || thcMg + cbdMg <= 0) {
+    return { error: "With 2 products, enter both THC mg and CBD mg (0 is fine for one of them)." };
+  }
+  const [strainA, strainB] = strains;
   const a = mgPerUnit(strainA, mode);
   const b = mgPerUnit(strainB, mode);
-  const reachable = [a, b];
-  const cbdMg = thcMg / ratio;
+  const possible = [a, b];
   const determinant = a.thc * b.cbd - b.thc * a.cbd;
   if (Math.abs(determinant) < SAME_RATIO_TOLERANCE) {
-    return { error: "Both products have the same THC:CBD ratio, so mixing them cannot change it.", reachable };
+    return { error: "Both products have the same THC:CBD ratio, so mixing them cannot change it.", possible };
   }
   const amountA = (thcMg * b.cbd - b.thc * cbdMg) / determinant;
   const amountB = (a.thc * cbdMg - thcMg * a.cbd) / determinant;
   if (amountA < 0 || amountB < 0) {
-    return { error: `${ratioText(ratio, 1)} is outside what these two products can make.`, reachable };
+    return { error: `${ratioText(thcMg, cbdMg)} THC:CBD can't be made from these two products.`, possible };
   }
-  return { amountA, amountB, thc: thcMg, cbd: cbdMg };
+  return {
+    parts: [
+      { strain: strainA, amount: amountA },
+      { strain: strainB, amount: amountB },
+    ],
+  };
+}
+
+function planOneProduct(strain, thcMg, cbdMg, mode) {
+  const perUnit = mgPerUnit(strain, mode);
+  if (thcMg > 0) {
+    if (perUnit.thc <= 0) return { error: `"${strain.name}" has no THC. Pick a product with THC, or enter only CBD mg.` };
+    return { parts: [{ strain, amount: thcMg / perUnit.thc }] };
+  }
+  if (cbdMg > 0) {
+    if (perUnit.cbd <= 0) return { error: `"${strain.name}" has no CBD.` };
+    return { parts: [{ strain, amount: cbdMg / perUnit.cbd }] };
+  }
+  return { error: "Enter THC mg or CBD mg." };
 }

@@ -31,9 +31,11 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D14 | Use-free days count as 0 mg in consumption math | a day off is real data; skipping it would hide reductions |
 | D15 | Arrows show direction, color shows good/bad | one rule for scores and usage |
 | D16 | Mobile sizing: 18px base, 48px tap targets, score grid 6×2 | Pixel 7 feedback: too small |
-| D17 | Calculator: 1–2 products, exact 2×2 solve, rounded to measurable steps, shows real totals | unique solution; more products = no unique answer |
+| D17 | Calculator: tap 1–2 products, type THC mg + CBD mg, exact 2×2 solve, rounded to measurable steps, shows real totals | user: ratio input was confusing; mg is what people think in |
 | D18 | Cravings as entries without dose (`noDose`) | a resisted craving has no dose but matters most |
 | D19 | New optional fields (`watch`, `noDose`, `watchTags`) without version bump | older data stays valid as-is; same rule as theme/ceiling |
+| D20 | One-time settings upgrade (`symptomsVersion`) adds new default symptoms (anxiety) | existing users get it; deleting it sticks |
+| D21 | Import into an empty app = exact restore incl. settings | new phone must get custom symptoms/tags back |
 
 ## Tasks
 | Task | Status | Owner |
@@ -51,6 +53,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-18 claude: fixed JSON export (blob URL revoked too early), calculator rebuilt (THC+CBD mg, chips, no crash on CBD-only), anxiety score, exact restore into empty app. 28 tests.
 - 2026-10-18 claude: dose calculator (1–2 products, ratio mixing), watch tags + no-dose entries on day/week/trends, reasons for 10%/5%. 26 tests.
 - 2026-10-18 claude: Pixel 7 sizing, usage-creep card + trend line + weekly rate, mean/median, use-free days, personal ceiling. 22 tests.
 - 2026-10-18 claude: theme switch (auto/light/dark), release flow to `main` in CLAUDE.md.

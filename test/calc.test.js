@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   activeMg,
-  amountForThc,
   DECARB_FACTOR,
   dailyThcSeries,
   dayRange,
@@ -12,7 +11,7 @@ import {
   isDose,
   mean,
   median,
-  mixForTarget,
+  planForMg,
   productMg,
   ratioText,
   rollingAverage,
@@ -157,26 +156,39 @@ test("usage change: less is better, tiny changes are the same", () => {
   assert.equal(usageChange(1, 0), "worse");
 });
 
-test("calculator: single product amount round-trips through productMg", () => {
-  const flower = { id: "f", name: "Flower", form: "flower", thc: 20, cbd: 1, acid: false };
-  const amount = amountForThc(flower, 15, "decarb");
-  assert.ok(Math.abs(amount - 75) < 1e-9); // 75 mg × 20% = 15 mg
-  const roundTrip = productMg({ strain: flower, amount }).thc;
-  assert.ok(Math.abs(roundTrip - 15) < 1e-9);
-  const acid = { ...flower, acid: true };
-  assert.ok(amountForThc(acid, 15, "decarb") > amountForThc(acid, 15, "raw")); // decarb loses mass → need more
-  assert.throws(() => amountForThc({ ...flower, thc: 0 }, 5, "raw"), /has no THC/);
+const totals = (plan) => {
+  let thc = 0;
+  let cbd = 0;
+  for (const part of plan.parts) {
+    const mg = productMg({ strain: part.strain, amount: part.amount });
+    thc += mg.thc;
+    cbd += mg.cbd;
+  }
+  return { thc, cbd };
+};
+const close = (a, b) => Math.abs(a - b) < 1e-9;
+const calcFlower = { id: "f", name: "Flower", form: "flower", thc: 20, cbd: 1, acid: false };
+const calcOil = { id: "o", name: "Oil", form: "oil", thc: 10, cbd: 10, acid: false };
+const cbdOnly = { id: "c", name: "CBD only", form: "oil", thc: 0, cbd: 20, acid: false };
+
+test("calculator, 1 product: THC sets the amount, or CBD if no THC given", () => {
+  const plan = planForMg([calcFlower], 15, 0, "decarb");
+  assert.ok(close(plan.parts[0].amount, 75)); // 75 mg × 20% = 15 mg
+  assert.ok(close(planForMg([cbdOnly], 0, 10, "decarb").parts[0].amount, 0.5)); // 0.5 ml × 20 mg/ml
+  assert.match(planForMg([cbdOnly], 5, 0, "decarb").error, /has no THC/); // was an uncaught crash before
+  const acid = { ...calcFlower, acid: true };
+  assert.ok(planForMg([acid], 15, 0, "decarb").parts[0].amount > planForMg([acid], 15, 0, "raw").parts[0].amount);
 });
 
-test("calculator: mixing two products hits THC and ratio exactly", () => {
-  const flower = { id: "f", name: "Flower", form: "flower", thc: 20, cbd: 1, acid: false };
-  const oil = { id: "o", name: "Oil", form: "oil", thc: 10, cbd: 10, acid: false };
-  const mix = mixForTarget(flower, oil, 20, 2, "decarb"); // 20 mg THC, 10 mg CBD
-  const thc = productMg({ strain: flower, amount: mix.amountA }).thc + productMg({ strain: oil, amount: mix.amountB }).thc;
-  const cbd = productMg({ strain: flower, amount: mix.amountA }).cbd + productMg({ strain: oil, amount: mix.amountB }).cbd;
-  assert.ok(Math.abs(thc - 20) < 1e-9 && Math.abs(cbd - 10) < 1e-9);
-  assert.match(mixForTarget(flower, oil, 20, 50, "decarb").error, /outside/); // 50:1 > flower's 20:1
-  assert.match(mixForTarget(oil, { ...oil, id: "o2" }, 20, 2, "decarb").error, /same THC:CBD ratio/);
+test("calculator, 2 products: hits THC and CBD mg exactly, explains impossible targets", () => {
+  const mg = totals(planForMg([calcFlower, calcOil], 5, 3, "decarb")); // 5:3 lies between 20:1 and 1:1
+  assert.ok(close(mg.thc, 5) && close(mg.cbd, 3));
+  assert.match(planForMg([calcFlower, calcOil], 5, 10, "decarb").error, /can't be made/); // 1:2 is CBD-heavier than both
+  const withCbdOnly = totals(planForMg([calcFlower, cbdOnly], 5, 10, "decarb"));
+  assert.ok(close(withCbdOnly.thc, 5) && close(withCbdOnly.cbd, 10));
+  assert.match(planForMg([calcFlower, calcOil], 30, 1, "decarb").error, /can't be made/); // 30:1 > flower's 20:1
+  assert.match(planForMg([calcOil, { ...calcOil, id: "o2" }], 5, 5, "decarb").error, /same THC:CBD ratio/);
+  assert.match(planForMg([calcFlower, calcOil], 5, Number.NaN, "decarb").error, /enter both/);
 });
 
 test("no-dose entries add no mg, are not uses, keep watch tags, don't break use-free days", () => {

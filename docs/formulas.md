@@ -42,11 +42,13 @@ Goal: stay as low as possible. All on THC mg/day in chart mode (decarb when mode
 - **Arrows**: ▲/▼ = real direction, color = good/bad (pain ▼ green, THC ▲ red).
 - **Personal ceiling** (optional, user-set): dashed line on chart, bar on Day view.
 
-## 7. Dose calculator
+## 7. Dose calculator (`planForMg`)
+Input: 1–2 products (tap chips), target THC mg and CBD mg.
 - mg per unit: flower `% / 100` per mg, oil mg/ml, edible mg/unit; × 0.877 if acid label (raw mode: no factor; absorbed treated as decarb, D5).
-- One product: `amount = THC mg / THC per unit`.
-- Two products, target THC `T` and ratio `r : 1`: solve `a·thcA + b·thcB = T`, `a·cbdA + b·cbdB = T / r`. Negative `a` or `b` → ratio not reachable; every mix lies between the two products' own ratios. Same ratio → mixing can't change it.
-- Amounts rounded to steps (1 mg, 0.05 ml, ¼ unit); the result shows what the **rounded** amounts really contain.
+- **1 product**: `amount = THC mg / THC per unit` (or CBD if no THC entered). The other compound is whatever the product has.
+- **2 products**: solve `a·thcA + b·thcB = THC`, `a·cbdA + b·cbdB = CBD`. Negative `a` or `b` → not possible; every mix's THC:CBD lies between the two products' own ratios (shown). Same ratio → mixing can't change it.
+- Errors are messages, never crashes. Amounts rounded to steps (1 mg, 0.05 ml, ¼ unit); result shows what the **rounded** amounts contain.
+- Example: 10/10 oil + 20 mg/ml CBD oil, 5 mg THC + 10 mg CBD → 0.5 ml + 0.25 ml.
 
 ## 8. Watch tags (cravings etc.)
 - Logged with a dose or without (`noDose` entry). No-dose entries add 0 mg, are not "uses", and don't break use-free days.

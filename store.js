@@ -20,7 +20,9 @@ export function defaultSettings() {
       { name: "mood", higherIsBetter: true },
       { name: "pain", higherIsBetter: false },
       { name: "ADHD", higherIsBetter: false },
+      { name: "anxiety", higherIsBetter: false },
     ],
+    symptomsVersion: SYMPTOMS_VERSION,
     effectTags: [
       { tag: "relaxed", good: true },
       { tag: "focused", good: true },
@@ -57,6 +59,22 @@ export function defaultWatchTags() {
 /** watchTags was added after v1 shipped: older data has none, so fall back to the defaults. */
 export function watchTagsOf(settings) {
   return settings.watchTags ?? defaultWatchTags();
+}
+
+// Bump when a default symptom is added, and add it in upgradeSettings, so existing users get it once.
+export const SYMPTOMS_VERSION = 2;
+
+/**
+ * Add default symptoms that were introduced after the user's data was created. Runs once per version:
+ * if the user deletes one later, it stays deleted.
+ */
+export function upgradeSettings(settings) {
+  const version = settings.symptomsVersion ?? 1;
+  if (version < 2 && !settings.symptoms.some((s) => s.name === "anxiety")) {
+    settings.symptoms.push({ name: "anxiety", higherIsBetter: false });
+  }
+  settings.symptomsVersion = SYMPTOMS_VERSION;
+  return settings;
 }
 
 export function emptyState() {
@@ -139,7 +157,9 @@ export function validate(state) {
 export function load(storage = globalThis.localStorage) {
   const raw = storage.getItem(STORAGE_KEY);
   if (!raw) return emptyState();
-  return fromJson(raw);
+  const state = fromJson(raw);
+  upgradeSettings(state.settings);
+  return state;
 }
 
 export function save(state, storage = globalThis.localStorage) {
@@ -161,6 +181,13 @@ export function fromJson(text) {
  * Restoring into an empty app gives exactly the backup's data.
  */
 export function merge(current, backup) {
+  // Fresh app (new phone, after "delete all"): take the backup as-is, settings included.
+  const currentIsEmpty = current.strains.length === 0 && current.entries.length === 0;
+  if (currentIsEmpty) {
+    const restored = structuredClone(backup);
+    upgradeSettings(restored.settings);
+    return restored;
+  }
   const byId = (list) => new Map(list.map((item) => [item.id, item]));
   const strains = byId(current.strains);
   for (const strain of backup.strains) strains.set(strain.id, strain);
