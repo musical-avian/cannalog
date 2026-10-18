@@ -1,5 +1,7 @@
 # Cannalog
 
+**Live:** https://musical-avian.github.io/cannalog/
+
 Private medical cannabis log. Runs in the browser, installable, offline. Data stays on your phone.
 
 - Strains/products: flower (%), oil (mg/ml), edible (mg/unit).

@@ -31,7 +31,8 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | calc + store + tests | done | claude |
 | UI: day / week / trends / settings, dialogs | done | claude |
 | PWA (sw, manifest), CI, docs | done | claude |
-| Enable Pages (Settings → Pages → Source: GitHub Actions), merge to `main` | open | user |
+| Merge to `main` | done | claude |
+| Enable Pages (Settings → Pages → Source: GitHub Actions) | open | user |
 | Re-verify PubChem CIDs | open | — |
 | PNG icons for older iOS home screen | idea (YAGNI until needed) | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
@@ -40,4 +41,5 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-18 claude: Pages URL in README, pushed to `main`.
 - 2026-10-18 claude: v1 — calc/store/app, 15 tests, Playwright e2e at 390×844 (add, edit, delete+undo, week, trends, export → wipe → import roundtrip equal, offline reload).
