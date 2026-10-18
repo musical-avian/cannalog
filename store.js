@@ -9,10 +9,12 @@ export const FORMS = {
   edible: { amountUnit: "units", strengthUnit: "mg/unit", defaultRoute: "oral" },
 };
 export const ROUTES = ["inhaled", "oral"];
+export const THEMES = ["auto", "light", "dark"]; // auto = follow the phone setting
 
 export function defaultSettings() {
   return {
     calcMode: "decarb",
+    theme: "auto",
     symptoms: [
       { name: "mood", higherIsBetter: true },
       { name: "pain", higherIsBetter: false },
@@ -89,6 +91,8 @@ export function validate(state) {
   for (const entry of state.entries) validateEntry(entry);
   const settings = state.settings;
   check(settings?.calcMode in { raw: 1, decarb: 1, absorbed: 1 }, `calcMode "${settings?.calcMode}" unknown`);
+  // theme was added after v1 shipped: missing means "auto", so older backups stay valid.
+  check(settings.theme === undefined || THEMES.includes(settings.theme), `theme "${settings.theme}" must be one of ${THEMES.join(", ")}`);
   check(Array.isArray(settings.symptoms), "settings.symptoms must be a list");
   check(Array.isArray(settings.effectTags), "settings.effectTags must be a list");
   return state;

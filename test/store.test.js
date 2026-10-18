@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { emptyState, fromJson, load, merge, save, toCsv, toJson, validate } from "../store.js";
 
@@ -13,7 +14,8 @@ const entry = {
   scores: { mood: 7 },
   effects: [{ tag: "relaxed", good: true }],
 };
-const sample = () => ({ ...emptyState(), strains: [strain], entries: [entry] });
+// Deep copy: tests mutate their sample, that must not leak into the next test.
+const sample = () => structuredClone({ ...emptyState(), strains: [strain], entries: [entry] });
 
 const memoryStorage = () => {
   const data = {};
@@ -61,4 +63,26 @@ test("CSV quotes commas, quotes and newlines", () => {
   assert.match(lines[0], /^day,time,strain,/);
   assert.match(lines[1], /"Flower, ""A"""/);
   assert.match(toCsv(sample()), /"calm,\nslept well"$/);
+});
+
+test("theme: missing is fine (older data), unknown is rejected", () => {
+  const old = sample();
+  delete old.settings.theme;
+  assert.doesNotThrow(() => validate(old));
+  const bad = sample();
+  bad.settings.theme = "purple";
+  assert.throws(() => validate(bad), /theme "purple"/);
+});
+
+test("dark color tokens are identical for auto and manual dark mode", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const tokensAfter = (marker) => {
+    const start = html.indexOf(marker);
+    const block = html.slice(start, html.indexOf("}", start));
+    return block.match(/--[\w-]+:\s*[^;]+;/g);
+  };
+  const auto = tokensAfter(':root:not([data-theme="light"]) {');
+  const manual = tokensAfter(':root[data-theme="dark"] {');
+  assert.ok(auto.length > 5);
+  assert.deepEqual(manual, auto);
 });

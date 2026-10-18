@@ -9,6 +9,7 @@ Stored in `localStorage["cannalog.v1"]` as JSON. Same shape in the JSON backup. 
   entries: [Entry],
   settings: {
     calcMode: "raw" | "decarb" | "absorbed",
+    theme: "auto" | "light" | "dark",   // optional, missing = auto (follow phone)
     symptoms: [{ name: "mood", higherIsBetter: true }],
     effectTags: [{ tag: "relaxed", good: true }],
   },

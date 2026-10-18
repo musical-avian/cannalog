@@ -23,6 +23,8 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D6 | No network at runtime; backup = JSON/CSV file via share sheet | data must not leave the phone |
 | D7 | Import merges by id (backup wins), settings kept | restore + combine devices with one code path |
 | D8 | Service worker network-first | updates appear at once; cache only for offline |
+| D11 | Work on feature branch, fast-forward `main` after each green change | user choice; `main` is what Pages serves |
+| D12 | Theme auto/light/dark in settings; dark tokens duplicated (media + manual), test keeps them equal | pure CSS cannot share one block between a media query and a selector |
 | D9 | Scores 0–10 as tap buttons, tap again clears | fast one-handed input, "not rated" ≠ 0 |
 | D10 | Pages deploys from branch, CI only lints/tests | Actions deploy was blocked by environment rule; branch deploy needs no workflow |
 
@@ -42,6 +44,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-18 claude: theme switch (auto/light/dark), release flow to `main` in CLAUDE.md.
 - 2026-10-18 claude: Pages switched to branch deploy → removed deploy job, added `.nojekyll`.
 - 2026-10-18 claude: Pages URL in README, pushed to `main`.
 - 2026-10-18 claude: v1 — calc/store/app, 15 tests, Playwright e2e at 390×844 (add, edit, delete+undo, week, trends, export → wipe → import roundtrip equal, offline reload).

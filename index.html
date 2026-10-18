@@ -23,10 +23,12 @@
         --bad: #c92a2a;
         --good-bg: #d3f9d8;
         --bad-bg: #ffe3e3;
+        --on-accent: #ffffff; /* text on accent-colored buttons */
         color-scheme: light;
       }
+      /* Dark tokens twice: once for "auto" (phone setting), once for the manual switch. Keep both in sync. */
       @media (prefers-color-scheme: dark) {
-        :root {
+        :root:not([data-theme="light"]) {
           --bg: #121513;
           --panel: #1b201c;
           --text: #e6ebe7;
@@ -39,12 +41,29 @@
           --bad: #ff8787;
           --good-bg: #1f3a24;
           --bad-bg: #44201f;
+          --on-accent: #121513;
           color-scheme: dark;
         }
       }
+      :root[data-theme="dark"] {
+        --bg: #121513;
+        --panel: #1b201c;
+        --text: #e6ebe7;
+        --muted: #95a097;
+        --line: #2c332d;
+        --accent: #51cf66;
+        --thc: #51cf66;
+        --cbd: #4dabf7;
+        --good: #69db7c;
+        --bad: #ff8787;
+        --good-bg: #1f3a24;
+        --bad-bg: #44201f;
+        --on-accent: #121513;
+        color-scheme: dark;
+      }
       * { box-sizing: border-box; }
       body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 80px; }
-      header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: baseline; }
+      header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: center; }
       h1 { font-size: 1.25rem; margin: 0; }
       h2 { font-size: 1rem; margin: 16px 0 8px; }
       main { padding: 0 16px; max-width: 720px; margin: 0 auto; }
@@ -57,7 +76,7 @@
       .cbd { color: var(--cbd); }
       button, select, input, textarea { font: inherit; color: inherit; }
       button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-height: 40px; cursor: pointer; }
-      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
       button.danger { color: var(--bad); }
       input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 40px; width: 100%; }
       input[type="checkbox"], input[type="radio"] { width: auto; min-height: auto; }
@@ -66,7 +85,7 @@
       nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
       nav.tabs button { flex: 1; border: 0; border-radius: 0; min-height: 56px; background: none; }
       nav.tabs button[aria-current="page"] { color: var(--accent); font-weight: 600; }
-      .fab { position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%; font-size: 2rem; line-height: 1; background: var(--accent); color: #fff; border: 0; box-shadow: 0 2px 8px #0004; z-index: 6; }
+      .fab { position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%; font-size: 2rem; line-height: 1; background: var(--accent); color: var(--on-accent); border: 0; box-shadow: 0 2px 8px #0004; z-index: 6; }
       .entry { cursor: pointer; }
       .chip { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 0.85rem; border: 1px solid var(--line); }
       .chip.good { background: var(--good-bg); color: var(--good); border-color: transparent; }
@@ -95,7 +114,7 @@
   <body>
     <header>
       <h1>Cannalog</h1>
-      <span class="muted" id="mode-badge"></span>
+      <span class="row"><span class="muted" id="mode-badge"></span><button type="button" id="theme-toggle"></button></span>
     </header>
     <main>
       <div id="load-error" class="error" hidden></div>

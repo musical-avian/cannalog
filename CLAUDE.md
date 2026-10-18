@@ -42,4 +42,7 @@ make test   # node --test
 make lint   # biome ci   (make fmt to fix)
 make serve  # python http.server on :8080
 ```
+## Release
+Develop on `claude/cannabis-use-logger-rtgc0v`. After `make lint` + `make test` pass: push the branch, then `git push origin HEAD:main` (fast-forward only, never force). `main` = live site.
+
 CI (`.github/workflows/check.yml`): lint → test. Pages = "Deploy from a branch" (`main`, root): pushing to `main` publishes. `.nojekyll` = serve files as-is.

@@ -29,6 +29,7 @@ import {
   newId,
   STORAGE_KEY,
   save,
+  THEMES,
   toCsv,
   toJson,
   validateEntry,
@@ -122,6 +123,32 @@ function toast(text, onUndo) {
   }, UNDO_SECONDS * 1000);
 }
 
+// ---------- theme ----------
+
+const THEME_LABELS = { auto: "◐", light: "☀", dark: "☾" };
+
+function theme() {
+  return state.settings.theme ?? "auto"; // older data has no theme
+}
+
+/** "auto" removes data-theme, so the CSS media query (phone setting) decides. */
+function applyTheme() {
+  const root = document.documentElement;
+  if (theme() === "auto") delete root.dataset.theme;
+  else root.dataset.theme = theme();
+  const button = $("#theme-toggle");
+  button.textContent = THEME_LABELS[theme()];
+  button.setAttribute("aria-label", `Theme: ${theme()}. Tap to change.`);
+  button.title = `Theme: ${theme()}`;
+  $('meta[name="theme-color"]').content = getComputedStyle(root).getPropertyValue("--panel").trim();
+}
+
+function nextTheme() {
+  const index = THEMES.indexOf(theme());
+  state.settings.theme = THEMES[(index + 1) % THEMES.length];
+  commit(); // render() re-applies the theme and redraws charts in the new colors
+}
+
 // ---------- views ----------
 
 function render() {
@@ -131,6 +158,7 @@ function render() {
   }
   $("#add-entry").hidden = view === "settings";
   $("#mode-badge").textContent = `mg = ${CALC_MODES[mode()]}`;
+  applyTheme();
   if (view === "day") renderDay();
   if (view === "week") renderWeek();
   if (view === "trends") renderTrends();
@@ -725,6 +753,9 @@ function wireEvents() {
     };
   }
   $("#add-entry").onclick = () => openEntryDialog(null);
+  $("#theme-toggle").onclick = nextTheme;
+  // In "auto", the phone switching light/dark must redraw charts (they copy colors at draw time).
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
   window.addEventListener("resize", () => {
     if (view === "trends") renderTrends();
   });
