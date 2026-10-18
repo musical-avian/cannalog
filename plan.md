@@ -36,6 +36,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D19 | New optional fields (`watch`, `noDose`, `watchTags`) without version bump | older data stays valid as-is; same rule as theme/ceiling |
 | D20 | One-time settings upgrade (`symptomsVersion`) adds new default symptoms (anxiety) | existing users get it; deleting it sticks |
 | D21 | Import into an empty app = exact restore incl. settings | new phone must get custom symptoms/tags back |
+| D22 | Backup = save file + share (text/plain) + copy/paste; app version in Settings; SW fetch with `no-cache` | JSON export failed silently on Android; old cached code ran for minutes; no way to tell versions apart |
 
 ## Tasks
 | Task | Status | Owner |
@@ -48,11 +49,13 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | Re-verify PubChem CIDs | open | — |
 | PNG icons for older iOS home screen | idea (YAGNI until needed) | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
+| Confirm backup buttons on a real Android phone | open | user |
 
 ## Open questions
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-18 claude: JSON export still dead on Android Chrome → 3 backup paths with feedback (save/share/copy) + paste restore, visible app version, SW revalidates (fixes stale app.js). Can't test on a real phone here.
 - 2026-10-18 claude: fixed JSON export (blob URL revoked too early), calculator rebuilt (THC+CBD mg, chips, no crash on CBD-only), anxiety score, exact restore into empty app. 28 tests.
 - 2026-10-18 claude: dose calculator (1–2 products, ratio mixing), watch tags + no-dose entries on day/week/trends, reasons for 10%/5%. 26 tests.
 - 2026-10-18 claude: Pixel 7 sizing, usage-creep card + trend line + weekly rate, mean/median, use-free days, personal ceiling. 22 tests.

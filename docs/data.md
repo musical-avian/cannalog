@@ -43,10 +43,13 @@ Entry = {
 NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 ```
 
-## Backup
-- **Export JSON**: full state. Phone → share sheet (save to Files/Drive/mail yourself). Desktop → download.
-- **Import JSON**: into an empty app (new phone) = exact restore incl. settings. Otherwise merges by id, backup wins; your settings stay. Broken file → nothing changes, error says why.
-- **Export CSV**: one row per entry, product mg + current-mode mg range, one column per symptom.
+## Backup (Settings → Backup)
+- **Save backup file**: JSON download → Downloads. Toast confirms; the browser may show nothing itself.
+- **Share backup…**: share sheet (Drive, mail, Files). Sent as `text/plain` named `.json`, because Android refuses to share `application/json` files.
+- **Copy backup**: JSON text to the clipboard; if blocked, the text is shown to copy by hand. Works even when downloads are blocked.
+- **Restore**: from a file, or paste the copied text. Into an empty app (new phone) = exact restore incl. settings. Otherwise merges by id, backup wins; your settings stay. Broken text → nothing changes, error says why.
+- **Save CSV**: one row per entry, product mg + current-mode mg range, one column per symptom, watch tags.
+- **App version** is shown at the bottom of the card.
 
 ## Broken saved data
 App does not overwrite it. It shows the error and the raw text to copy out.

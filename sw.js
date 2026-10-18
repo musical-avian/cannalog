@@ -1,7 +1,7 @@
-// Offline support. Network first (so updates show up at once), cache as fallback when offline.
+// Offline support. Network first, revalidated every time (so updates show up at once), cache as fallback when offline.
 // Bump CACHE when the file list changes.
 
-const CACHE = "cannalog-v1";
+const CACHE = "cannalog-v2";
 const FILES = [
   "./",
   "index.html",
@@ -27,7 +27,9 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    fetch(event.request)
+    // no-cache: always ask the server (GitHub Pages' 10-min HTTP cache kept old app.js on phones).
+    // Fetch by URL: passing options together with a page-navigation request throws in Chrome.
+    fetch(event.request.url, { cache: "no-cache" })
       .then((response) => {
         const copy = response.clone();
         caches.open(CACHE).then((cache) => cache.put(event.request, copy));

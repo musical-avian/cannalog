@@ -52,6 +52,8 @@ import {
 const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
+// Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
+const APP_VERSION = "2026-10-18.7";
 const TREND_WINDOW_DAYS = 7;
 const SYMPTOM_COLORS = ["#e8590c", "#ae3ec9", "#1098ad", "#f59f00", "#d6336c", "#5c940d"];
 
@@ -140,16 +142,11 @@ function effectChips(effects) {
   return effects.map((e) => `<span class="chip ${e.good ? "good" : "bad"}">${esc(e.tag)}</span>`).join(" ");
 }
 
-function download(filename, text, type) {
+/** Download a file via a temporary link. Feedback via toast, because the browser may show nothing. */
+function saveFile(filename, text, type) {
   const file = new File([text], filename, { type });
-  // On phones the share sheet lets you save straight to Files/Drive/etc.
-  if (navigator.canShare?.({ files: [file] })) {
-    navigator.share({ files: [file] }).catch(() => {}); // user cancelled: nothing to do
-    return;
-  }
-  // Android Chrome cannot share .json files, so JSON always lands here.
   // The link must be in the page, and the blob URL must live until the download has started:
-  // revoking it right after click() made the JSON export fail on phones.
+  // revoking it right after click() made downloads fail on phones.
   const link = document.createElement("a");
   link.href = URL.createObjectURL(file);
   link.download = filename;
@@ -157,12 +154,54 @@ function download(filename, text, type) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(link.href), DOWNLOAD_URL_LIFETIME_MS);
+  toast(`Saved ${filename} – check Downloads. Nothing? Use "Copy backup".`);
+}
+
+/**
+ * Open the phone's share sheet (Drive, mail, Files...).
+ * Sent as text/plain because Android refuses to share application/json files; the name keeps .json.
+ */
+async function shareFile(filename, text) {
+  const file = new File([text], filename, { type: "text/plain" });
+  if (!navigator.canShare?.({ files: [file] })) {
+    alert('This browser cannot share files. Use "Save backup file" or "Copy backup".');
+    return;
+  }
+  try {
+    await navigator.share({ files: [file], title: filename });
+  } catch (error) {
+    if (error.name === "AbortError") return; // user closed the share sheet
+    console.error(error);
+    alert(`Sharing failed: ${error.message}\nUse "Save backup file" or "Copy backup".`);
+  }
+}
+
+/** Copy the backup as text. If the clipboard is blocked, show the text so it can be copied by hand. */
+async function copyBackup() {
+  const json = toJson(state);
+  try {
+    await navigator.clipboard.writeText(json);
+    toast("Backup copied. Paste it into a note or mail it to yourself.");
+  } catch (error) {
+    console.error(error);
+    const box = $("#backup-text");
+    box.hidden = false;
+    box.value = json;
+    box.select();
+    toast("Copy blocked: long-press the text → Select all → Copy.");
+  }
+}
+
+function backupFilename(extension) {
+  return `cannalog-${dayKey(new Date())}.${extension}`;
 }
 
 let undoTimer;
+/** Short message at the bottom. With onUndo: shows an Undo button. */
 function toast(text, onUndo) {
   $("#toast-text").textContent = text;
   $("#toast").hidden = false;
+  $("#toast-undo").hidden = !onUndo;
   $("#toast-undo").onclick = () => {
     $("#toast").hidden = true;
     onUndo();
@@ -645,12 +684,21 @@ function renderSettings() {
 
     <h2>Backup</h2>
     <div class="card">
+      <p class="muted">Full backup (JSON). Keep a copy off this phone.</p>
       <div class="row">
-        <button id="export-json">Export JSON</button>
-        <button id="export-csv">Export CSV</button>
-        <label class="row"><button type="button" id="import-button">Import JSON</button><input type="file" id="import-file" accept="application/json,.json" hidden /></label>
+        <button type="button" id="save-backup">Save backup file</button>
+        <button type="button" id="share-backup">Share backup…</button>
+        <button type="button" id="copy-backup">Copy backup</button>
       </div>
-      <p class="muted">JSON = full backup (import merges by id). CSV = for spreadsheets. ${state.entries.length} entries stored. <span id="persist-status"></span></p>
+      <textarea id="backup-text" rows="4" readonly hidden></textarea>
+      <p class="muted">Restore: pick a backup file, or paste copied backup text. Into an empty app = exact restore; otherwise merged.</p>
+      <div class="row">
+        <button type="button" id="import-button">Restore from file</button><input type="file" id="import-file" accept="application/json,.json,text/plain" hidden />
+      </div>
+      <textarea id="paste-backup" rows="2" placeholder="…or paste backup text here"></textarea>
+      <button type="button" id="paste-import">Restore pasted text</button>
+      <p class="muted">For spreadsheets: <button type="button" id="export-csv">Save CSV</button></p>
+      <p class="muted">${state.entries.length} entries stored. <span id="persist-status"></span> App version ${APP_VERSION}.</p>
       <button class="danger" id="delete-all">Delete all data</button>
     </div>
     ${debug}`;
@@ -1069,8 +1117,11 @@ function onViewClick(event) {
   else if (data.calcProduct) return toggleCalcProduct(data.calcProduct);
   else if (data.calcThc) return setCalcField("thcMg", data.calcThc);
   else if (data.calcCbd) return setCalcField("cbdMg", data.calcCbd);
-  else if (target.id === "export-json") return download(`cannalog-${dayKey(new Date())}.json`, toJson(state), "application/json");
-  else if (target.id === "export-csv") return download(`cannalog-${dayKey(new Date())}.csv`, toCsv(state), "text/csv");
+  else if (target.id === "save-backup") return saveFile(backupFilename("json"), toJson(state), "application/json");
+  else if (target.id === "share-backup") return shareFile(backupFilename("json"), toJson(state));
+  else if (target.id === "copy-backup") return copyBackup();
+  else if (target.id === "paste-import") return importText($("#paste-backup").value);
+  else if (target.id === "export-csv") return saveFile(backupFilename("csv"), toCsv(state), "text/csv");
   else if (target.id === "import-button") return $("#import-file").click();
   else if (target.id === "delete-all") return deleteAll();
   else return;
@@ -1189,8 +1240,14 @@ function wireEvents() {
 
 async function importFile(file) {
   if (!file) return;
+  importText(await file.text());
+}
+
+/** Restore/merge a backup given as JSON text (from a file or pasted). */
+function importText(text) {
+  if (text.trim() === "") return alert("Nothing to restore: the text is empty.");
   try {
-    const backup = fromJson(await file.text());
+    const backup = fromJson(text);
     state = merge(state, backup);
     commit();
     alert(`Imported ${backup.entries.length} entries and ${backup.strains.length} strains.`);
