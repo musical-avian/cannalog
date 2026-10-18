@@ -10,6 +10,7 @@ Stored in `localStorage["cannalog.v1"]` as JSON. Same shape in the JSON backup. 
   settings: {
     calcMode: "raw" | "decarb" | "absorbed",
     theme: "auto" | "light" | "dark",   // optional, missing = auto (follow phone)
+    dailyLimitMg: 30,                    // optional personal THC ceiling, null/missing = off
     symptoms: [{ name: "mood", higherIsBetter: true }],
     effectTags: [{ tag: "relaxed", good: true }],
   },

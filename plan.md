@@ -23,10 +23,14 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D6 | No network at runtime; backup = JSON/CSV file via share sheet | data must not leave the phone |
 | D7 | Import merges by id (backup wins), settings kept | restore + combine devices with one code path |
 | D8 | Service worker network-first | updates appear at once; cache only for offline |
-| D11 | Work on feature branch, fast-forward `main` after each green change | user choice; `main` is what Pages serves |
-| D12 | Theme auto/light/dark in settings; dark tokens duplicated (media + manual), test keeps them equal | pure CSS cannot share one block between a media query and a selector |
 | D9 | Scores 0–10 as tap buttons, tap again clears | fast one-handed input, "not rated" ≠ 0 |
 | D10 | Pages deploys from branch, CI only lints/tests | Actions deploy was blocked by environment rule; branch deploy needs no workflow |
+| D11 | Work on feature branch, fast-forward `main` after each green change | user choice; `main` is what Pages serves |
+| D12 | Theme auto/light/dark in settings; dark tokens duplicated (media + manual), test keeps them equal | pure CSS cannot share one block between a media query and a selector |
+| D13 | Creep = EMA trend (α 0.1, Hacker's Diet/Libra) + 28-day regression rate + mean/median + use-free days | robust to single heavy days; libra-app.eu unreachable from sandbox, method from its origin |
+| D14 | Use-free days count as 0 mg in consumption math | a day off is real data; skipping it would hide reductions |
+| D15 | Arrows show direction, color shows good/bad | one rule for scores and usage |
+| D16 | Mobile sizing: 18px base, 48px tap targets, score grid 6×2 | Pixel 7 feedback: too small |
 
 ## Tasks
 | Task | Status | Owner |
@@ -44,6 +48,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-18 claude: Pixel 7 sizing, usage-creep card + trend line + weekly rate, mean/median, use-free days, personal ceiling. 22 tests.
 - 2026-10-18 claude: theme switch (auto/light/dark), release flow to `main` in CLAUDE.md.
 - 2026-10-18 claude: Pages switched to branch deploy → removed deploy job, added `.nojekyll`.
 - 2026-10-18 claude: Pages URL in README, pushed to `main`.

@@ -62,41 +62,47 @@
         color-scheme: dark;
       }
       * { box-sizing: border-box; }
-      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 80px; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 18px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; padding-bottom: 96px; -webkit-text-size-adjust: 100%; }
       header { padding: 12px 16px 4px; display: flex; justify-content: space-between; align-items: center; }
-      h1 { font-size: 1.25rem; margin: 0; }
-      h2 { font-size: 1rem; margin: 16px 0 8px; }
+      h1 { font-size: 1.4rem; margin: 0; }
+      h2 { font-size: 1.1rem; margin: 20px 0 8px; }
       main { padding: 0 16px; max-width: 720px; margin: 0 auto; }
-      .muted { color: var(--muted); font-size: 0.85rem; }
+      .muted { color: var(--muted); font-size: 0.9rem; }
       .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin: 8px 0; }
       .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
       .spread { justify-content: space-between; }
-      .big { font-size: 1.4rem; font-weight: 600; }
+      .card .row.spread > :last-child { margin-left: auto; } /* value stays right when the row wraps */
+      .big { font-size: 1.6rem; font-weight: 600; }
       .thc { color: var(--thc); }
       .cbd { color: var(--cbd); }
       button, select, input, textarea { font: inherit; color: inherit; }
-      button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; min-height: 40px; cursor: pointer; }
+      button { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 16px; min-height: 48px; min-width: 48px; cursor: pointer; }
       button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
       button.danger { color: var(--bad); }
-      input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 40px; width: 100%; }
+      input, select, textarea { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-height: 48px; width: 100%; }
       input[type="checkbox"], input[type="radio"] { width: auto; min-height: auto; }
       label.field { display: block; margin: 8px 0; }
-      label.field > span { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 2px; }
+      label.field > span { display: block; font-size: 0.9rem; color: var(--muted); margin-bottom: 2px; }
       nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--panel); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
-      nav.tabs button { flex: 1; border: 0; border-radius: 0; min-height: 56px; background: none; }
+      nav.tabs button { flex: 1; border: 0; border-radius: 0; min-height: 64px; background: none; font-size: 1rem; }
       nav.tabs button[aria-current="page"] { color: var(--accent); font-weight: 600; }
-      .fab { position: fixed; right: 16px; bottom: calc(72px + env(safe-area-inset-bottom)); width: 56px; height: 56px; border-radius: 50%; font-size: 2rem; line-height: 1; background: var(--accent); color: var(--on-accent); border: 0; box-shadow: 0 2px 8px #0004; z-index: 6; }
+      .fab { position: fixed; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom)); width: 64px; height: 64px; border-radius: 50%; font-size: 2rem; line-height: 1; background: var(--accent); color: var(--on-accent); border: 0; box-shadow: 0 2px 8px #0004; z-index: 6; }
       .entry { cursor: pointer; }
-      .chip { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: 0.85rem; border: 1px solid var(--line); }
+      .chip { display: inline-block; border-radius: 999px; padding: 4px 12px; font-size: 0.95rem; border: 1px solid var(--line); }
       .chip.good { background: var(--good-bg); color: var(--good); border-color: transparent; }
       .chip.bad { background: var(--bad-bg); color: var(--bad); border-color: transparent; }
-      button.chip { min-height: 36px; padding: 4px 12px; background: var(--panel); }
+      button.chip { min-height: 44px; padding: 6px 14px; background: var(--panel); }
       button.chip.good[aria-pressed="false"], button.chip.bad[aria-pressed="false"] { background: var(--panel); color: var(--muted); border-color: var(--line); }
-      .scores { display: grid; grid-template-columns: repeat(11, 1fr); gap: 2px; }
-      .scores button { padding: 0; min-height: 36px; font-size: 0.85rem; }
+      .scores { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; } /* 0–5 and 6–10: two rows, big enough to tap */
+      .scores button { padding: 0; min-height: 48px; min-width: 0; font-size: 1rem; }
       .scores button[aria-pressed="true"] { outline: 2px solid var(--text); font-weight: 700; }
-      table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-      th, td { padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--line); }
+      table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+      th:first-child, td:first-child { position: sticky; left: 0; background: var(--panel); } /* day column stays visible when scrolling */
+      .u-legend { font-size: 1rem; }
+      .meter { height: 10px; border-radius: 5px; background: var(--line); overflow: hidden; margin-top: 6px; }
+      .meter span { display: block; height: 100%; background: var(--accent); }
+      .meter.over span { background: var(--bad); }
+      th, td { padding: 10px 6px; text-align: right; border-bottom: 1px solid var(--line); }
       th:first-child, td:first-child { text-align: left; }
       .better { color: var(--good); font-weight: 600; }
       .worse { color: var(--bad); font-weight: 600; }

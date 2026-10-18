@@ -86,3 +86,14 @@ test("dark color tokens are identical for auto and manual dark mode", () => {
   assert.ok(auto.length > 5);
   assert.deepEqual(manual, auto);
 });
+
+test("daily limit: optional, must be > 0 when set", () => {
+  const s = sample();
+  assert.doesNotThrow(() => validate(s));
+  s.settings.dailyLimitMg = null;
+  assert.doesNotThrow(() => validate(s));
+  s.settings.dailyLimitMg = 30;
+  assert.doesNotThrow(() => validate(s));
+  s.settings.dailyLimitMg = 0;
+  assert.throws(() => validate(s), /dailyLimitMg 0 must be a number > 0/);
+});

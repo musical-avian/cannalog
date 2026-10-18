@@ -5,19 +5,27 @@ import {
   activeMg,
   addDays,
   CALC_MODES,
+  dailyThcSeries,
   dayKey,
   dayRange,
   dayStart,
   entriesBetween,
   goodness,
   groupByDay,
+  mean,
+  median,
+  RATE_WINDOW_DAYS,
   rangeText,
   ratioText,
   rollingAverage,
   round1,
+  smoothTrend,
   summarize,
   thcShare,
   trend,
+  usageChange,
+  useFreeDays,
+  weeklyRate,
   weekStart,
 } from "./calc.js";
 import {
@@ -60,6 +68,19 @@ function mode() {
   return state.settings.calcMode;
 }
 
+/** Charts, ceiling and creep use one number per day: absorbed is a wide range, so they use decarb (D5). */
+function chartMode() {
+  if (mode() === "absorbed") return "decarb";
+  return mode();
+}
+
+/** Personal daily THC ceiling in mg, or null when not set. */
+function dailyLimit() {
+  return state.settings.dailyLimitMg ?? null;
+}
+
+const CHART_FONT = "15px system-ui, sans-serif";
+
 /** Save, then redraw. Every change goes through here. */
 function commit() {
   try {
@@ -84,11 +105,24 @@ function scoreColor(score, higherIsBetter) {
   return `hsl(${hue} 70% 45% / 0.3)`;
 }
 
-const ARROWS = { better: "▲", worse: "▼", same: "=", none: "" };
+/**
+ * Arrow shows the real direction (▲ went up, ▼ went down), color shows good (green) or bad (red).
+ * So pain going down is a green ▼, THC going up is a red ▲.
+ */
+function directionSpan(direction, wentUp) {
+  if (direction === "none") return "";
+  if (direction === "same") return `<span class="same">=</span>`;
+  const arrow = wentUp ? "▲" : "▼";
+  return `<span class="${direction}">${arrow}</span>`;
+}
 
 function trendSpan(now, before, higherIsBetter, threshold) {
-  const direction = trend(now, before, higherIsBetter, threshold);
-  return `<span class="${direction}" title="vs previous week">${ARROWS[direction]}</span>`;
+  return directionSpan(trend(now, before, higherIsBetter, threshold), now > before);
+}
+
+/** Usage: less is the goal, so up = red. */
+function usageSpan(now, before) {
+  return directionSpan(usageChange(now, before), now > before);
 }
 
 function effectChips(effects) {
@@ -125,7 +159,7 @@ function toast(text, onUndo) {
 
 // ---------- theme ----------
 
-const THEME_LABELS = { auto: "◐", light: "☀", dark: "☾" };
+const THEME_LABELS = { auto: "Auto", light: "Light", dark: "Dark" };
 
 function theme() {
   return state.settings.theme ?? "auto"; // older data has no theme
@@ -179,8 +213,20 @@ function summaryCard(summary) {
       <span class="big thc">${rangeText(summary.thc)} mg THC</span>
       <span class="big cbd">${rangeText(summary.cbd)} mg CBD</span>
     </div>
-    <div class="row spread muted"><span>ratio THC:CBD ${ratio}</span><span>${summary.count} uses</span></div>
+    <div class="row spread muted"><span>ratio THC:CBD ${ratio}</span><span>${summary.count} ${summary.count === 1 ? "use" : "uses"}</span></div>
     <div class="row">${scores}</div>
+  </div>`;
+}
+
+/** "24 / 30 mg THC" bar against the user's own ceiling. Empty when no ceiling is set. */
+function limitMeter(thcMg) {
+  const limit = dailyLimit();
+  if (limit === null) return "";
+  const percent = Math.min(100, (100 * thcMg) / limit);
+  const over = thcMg > limit;
+  return `<div class="card">
+    <div class="row spread"><span>${round1(thcMg)} / ${round1(limit)} mg THC</span><span class="${over ? "worse" : "muted"}">${over ? "over your ceiling" : "your ceiling"}</span></div>
+    <div class="meter ${over ? "over" : ""}"><span style="width:${percent}%"></span></div>
   </div>`;
 }
 
@@ -218,8 +264,28 @@ function renderDay() {
       <button data-day="1" aria-label="Next day">›</button>
     </div>
     ${summaryCard(summarize(entries, mode()))}
+    ${limitMeter(summarize(entries, chartMode()).thc[1])}
     ${items.join("") || `<p class="muted">Nothing logged. Tap + to add.</p>`}
     ${shownDay !== dayKey(new Date()) ? `<button data-day="today">Back to today</button>` : ""}`;
+}
+
+/** THC per day this week vs last week: mean, median, use-free days. Days without use count as 0. */
+function weekUsageCard(byDay, thisWeek) {
+  const thisKeys = dayRange(shownWeek, addDays(shownWeek, 6));
+  const prevKeys = dayRange(addDays(shownWeek, -7), addDays(shownWeek, -1));
+  const thisDaily = dailyThcSeries(thisKeys, byDay, chartMode());
+  const prevDaily = dailyThcSeries(prevKeys, byDay, chartMode());
+  const thisFree = useFreeDays(thisKeys, byDay);
+  const prevFree = useFreeDays(prevKeys, byDay);
+  const row = (label, now, before, span) =>
+    `<div class="row spread"><span>${label}</span><span><b>${round1(now)}</b> ${span} <span class="muted">(prev ${round1(before)})</span></span></div>`;
+  return `<h2>THC per day</h2>
+    <div class="card">
+      ${row("mean mg", mean(thisDaily), mean(prevDaily), usageSpan(mean(thisDaily), mean(prevDaily)))}
+      ${row("median mg", median(thisDaily), median(prevDaily), usageSpan(median(thisDaily), median(prevDaily)))}
+      ${row("use-free days", thisFree, prevFree, trendSpan(thisFree, prevFree, true, 1))}
+      <p class="muted">THC:CBD this week ${ratioText(thisWeek.thc[1], thisWeek.cbd[1])}. Median ignores a single heavy day.</p>
+    </div>`;
 }
 
 function renderWeek() {
@@ -242,7 +308,6 @@ function renderWeek() {
       <td>${esc(name)}</td>
       <td class="thc">${day.count ? round1(day.thc[1]) : ""}</td>
       <td class="cbd">${day.count ? round1(day.cbd[1]) : ""}</td>
-      <td>${day.count ? ratioText(day.thc[1], day.cbd[1]) : ""}</td>
       ${symptoms.map((s) => scoreCell(day, s)).join("")}
     </tr>`;
   });
@@ -251,7 +316,6 @@ function renderWeek() {
     <th>Week</th>
     <th class="thc">${round1(thisWeek.thc[1])}</th>
     <th class="cbd">${round1(thisWeek.cbd[1])}</th>
-    <th>${ratioText(thisWeek.thc[1], thisWeek.cbd[1])}</th>
     ${symptoms
       .map((s) => {
         const now = thisWeek.scores[s.name];
@@ -291,32 +355,61 @@ function renderWeek() {
     </div>
     <div class="card" style="overflow-x:auto">
       <table>
-        <thead><tr><th></th><th class="thc">THC</th><th class="cbd">CBD</th><th>ratio</th>${symptoms.map((s) => `<th>${esc(s.name)}</th>`).join("")}</tr></thead>
+        <thead><tr><th></th><th class="thc">THC</th><th class="cbd">CBD</th>${symptoms.map((s) => `<th>${esc(s.name)}</th>`).join("")}</tr></thead>
         <tbody>${rows.join("")}</tbody>
         <tfoot>${totalRow}</tfoot>
       </table>
-      <p class="muted">mg ${esc(CALC_MODES[mode()])}${mode() === "absorbed" ? " (upper end)" : ""}. Score colors: green = good, red = bad. ▲▼ vs previous week.</p>
+      <p class="muted">mg ${esc(CALC_MODES[mode()])}${mode() === "absorbed" ? " (upper end)" : ""}. Colors: green = good, red = bad. ▲▼ = up/down vs previous week.</p>
     </div>
+    ${weekUsageCard(byDay, thisWeek)}
     <h2>Effects</h2>
     <div class="card">${effectRows.join("") || `<span class="muted">none logged</span>`}</div>
     <h2>Notes</h2>
     <div class="card">${notes.join("") || `<span class="muted">none</span>`}</div>`;
 }
 
+/** Top of Trends: is usage creeping up? Always the last 4 weeks, whatever range the charts show. */
+function usageCard(byDay) {
+  const today = dayKey(new Date());
+  const last28 = dailyThcSeries(dayRange(addDays(today, -(RATE_WINDOW_DAYS - 1)), today), byDay, chartMode());
+  const last7 = last28.slice(-7);
+  const prev7 = last28.slice(-14, -7);
+  const freeLast7 = last7.filter((mg) => mg === 0).length;
+  const freePrev7 = prev7.filter((mg) => mg === 0).length;
+  const rate = weeklyRate(last28);
+  const sign = rate.perWeek > 0 ? "+" : "";
+  const rateWords = { worse: "rising", better: "falling", same: "stable" };
+  return `<div class="card">
+    <div class="row spread"><span>THC trend (4 weeks)</span><span class="${rate.direction}"><b>${rateWords[rate.direction]}</b> ${sign}${round1(rate.perWeek)} mg/day per week</span></div>
+    <div class="row spread"><span>Last 7 days, mean</span><span><b>${round1(mean(last7))}</b> mg/day ${usageSpan(mean(last7), mean(prev7))} <span class="muted">(prev ${round1(mean(prev7))})</span></span></div>
+    <div class="row spread"><span>Use-free days</span><span><b>${freeLast7}</b> ${trendSpan(freeLast7, freePrev7, true, 1)} <span class="muted">(prev ${freePrev7})</span></span></div>
+  </div>`;
+}
+
+/** Daily THC from the first entry (or range start) to today, so the smoothed trend is warmed up before the range starts. */
+function smoothedThc(byDay, keys) {
+  const firstEntryDay = Object.keys(byDay).sort()[0] ?? keys[0];
+  const startKey = firstEntryDay < keys[0] ? firstEntryDay : keys[0];
+  const allKeys = dayRange(startKey, keys[keys.length - 1]);
+  const trendLine = smoothTrend(dailyThcSeries(allKeys, byDay, chartMode()));
+  return trendLine.slice(-keys.length);
+}
+
 function renderTrends() {
   for (const chart of charts) chart.destroy();
   charts = [];
 
-  // Absorbed is a wide range; a single bar would look precise. Charts use decarb mg instead (docs/formulas.md).
-  const chartMode = mode() === "absorbed" ? "decarb" : mode();
   const today = dayKey(new Date());
   const keys = dayRange(addDays(today, -(trendDays - 1)), today);
   const byDay = groupByDay(state.entries);
-  const days = keys.map((key) => summarize(byDay[key] ?? [], chartMode));
+  const days = keys.map((key) => summarize(byDay[key] ?? [], chartMode()));
   const x = keys.map((key) => dayStart(key).getTime() / 1000);
   const thc = days.map((d) => (d.count ? d.thc[1] : null));
   const cbd = days.map((d) => (d.count ? d.cbd[1] : null));
   const share = days.map((d) => thcShare(d.thc[1], d.cbd[1]));
+  const thcTrend = smoothedThc(byDay, keys);
+  const limit = dailyLimit();
+  const limitLine = keys.map(() => limit);
   const symptoms = state.settings.symptoms;
   const symptomLines = symptoms.map((s) =>
     rollingAverage(
@@ -326,8 +419,10 @@ function renderTrends() {
   );
 
   $("#view-trends").innerHTML = `
+    <h2>Usage</h2>
+    ${usageCard(byDay)}
     <div class="row">${[7, 30, 90].map((n) => `<button data-range="${n}" ${n === trendDays ? 'class="primary"' : ""}>${n} d</button>`).join("")}</div>
-    <h2>Consumption (mg ${esc(CALC_MODES[chartMode])}) and THC share</h2>
+    <h2>THC / CBD per day (mg ${esc(CALC_MODES[chartMode()])})</h2>
     <div class="card"><div id="chart-mg" class="chart"></div></div>
     <h2>Symptoms (${TREND_WINDOW_DAYS}-day average, 0–10)</h2>
     <div class="card"><div id="chart-scores" class="chart"></div></div>
@@ -337,7 +432,14 @@ function renderTrends() {
   const width = $("#chart-mg").clientWidth;
   const css = getComputedStyle(document.documentElement);
   const color = (name) => css.getPropertyValue(name).trim();
-  const axis = { stroke: color("--muted"), grid: { stroke: color("--line") }, ticks: { stroke: color("--line") } };
+  const axis = {
+    stroke: color("--muted"),
+    font: CHART_FONT,
+    labelFont: CHART_FONT,
+    size: 56,
+    grid: { stroke: color("--line") },
+    ticks: { stroke: color("--line") },
+  };
   const bars = (align) => uPlot.paths.bars({ size: [0.4, 40], align });
 
   // Show notes of the day under the cursor, so mood text sits next to the numbers.
@@ -353,23 +455,31 @@ function renderTrends() {
   const cursor = { sync: { key: "cannalog" } };
   const hooks = { setCursor: [showNotes] };
 
+  const mgSeries = [
+    {},
+    { label: "THC", stroke: color("--thc"), fill: color("--thc"), paths: bars(-1), points: { show: false } },
+    { label: "CBD", stroke: color("--cbd"), fill: color("--cbd"), paths: bars(1), points: { show: false } },
+    { label: "THC trend", stroke: color("--text"), width: 3, points: { show: false } },
+    { label: "THC %", stroke: "#f08c00", scale: "share", width: 2, spanGaps: true },
+  ];
+  const mgData = [x, thc, cbd, thcTrend, share];
+  if (limit !== null) {
+    mgSeries.push({ label: "ceiling", stroke: color("--bad"), dash: [8, 6], width: 2, points: { show: false } });
+    mgData.push(limitLine);
+  }
+
   charts.push(
     new uPlot(
       {
         width,
-        height: 220,
+        height: 280,
         cursor,
         hooks,
         scales: { x: { time: true }, share: { range: [0, 100] } },
         axes: [axis, { ...axis, label: "mg" }, { ...axis, scale: "share", side: 1, grid: { show: false }, label: "THC %" }],
-        series: [
-          {},
-          { label: "THC mg", stroke: color("--thc"), fill: color("--thc"), paths: bars(-1), points: { show: false } },
-          { label: "CBD mg", stroke: color("--cbd"), fill: color("--cbd"), paths: bars(1), points: { show: false } },
-          { label: "THC %", stroke: "#f08c00", scale: "share", width: 2, spanGaps: true },
-        ],
+        series: mgSeries,
       },
-      [x, thc, cbd, share],
+      mgData,
       $("#chart-mg"),
     ),
   );
@@ -378,7 +488,7 @@ function renderTrends() {
     new uPlot(
       {
         width,
-        height: 200,
+        height: 240,
         cursor,
         hooks,
         scales: { x: { time: true }, y: { range: [0, 10] } },
@@ -388,7 +498,7 @@ function renderTrends() {
           ...symptoms.map((s, i) => ({
             label: `${s.name}${s.higherIsBetter ? " ↑good" : " ↓good"}`,
             stroke: SYMPTOM_COLORS[i % SYMPTOM_COLORS.length],
-            width: 2,
+            width: 3,
             spanGaps: true,
           })),
         ],
@@ -432,6 +542,13 @@ function renderSettings() {
           `<label class="row"><input type="radio" name="calc-mode" value="${key}" ${key === settings.calcMode ? "checked" : ""}/> <b>${label}</b> <span class="muted">${modeHelp[key]}</span></label>`,
       )
       .join("")}</div>
+
+    <h2>Personal daily ceiling</h2>
+    <form class="card" id="limit-form">
+      <label class="field"><span>Max THC per day (mg, ${esc(CALC_MODES[chartMode()])}). Your own number, not a recommendation. Empty = off.</span>
+        <input name="dailyLimit" type="number" inputmode="decimal" step="any" min="0" value="${dailyLimit() ?? ""}" /></label>
+      <button type="submit">Save ceiling</button>
+    </form>
 
     <h2>Strains / products</h2>
     ${strains || `<p class="muted">none yet</p>`}
@@ -719,6 +836,13 @@ function onViewSubmit(event) {
     const name = form.symptomName.value.trim();
     if (state.settings.symptoms.some((s) => s.name === name)) return alert(`"${name}" already exists`);
     state.settings.symptoms.push({ name, higherIsBetter: false });
+  }
+  if (form.id === "limit-form") {
+    const text = form.dailyLimit.value.trim();
+    const limit = Number(text);
+    if (text === "") state.settings.dailyLimitMg = null;
+    else if (limit > 0) state.settings.dailyLimitMg = limit;
+    else return alert(`Ceiling ${text} must be a number > 0, or empty for off`);
   }
   if (form.id === "tag-form") {
     const tag = form.tag.value.trim();

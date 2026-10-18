@@ -93,6 +93,9 @@ export function validate(state) {
   check(settings?.calcMode in { raw: 1, decarb: 1, absorbed: 1 }, `calcMode "${settings?.calcMode}" unknown`);
   // theme was added after v1 shipped: missing means "auto", so older backups stay valid.
   check(settings.theme === undefined || THEMES.includes(settings.theme), `theme "${settings.theme}" must be one of ${THEMES.join(", ")}`);
+  // dailyLimitMg: optional personal ceiling. Missing or null = off.
+  const limit = settings.dailyLimitMg;
+  check(limit == null || (isNumber(limit) && limit > 0), `dailyLimitMg ${limit} must be a number > 0, or empty`);
   check(Array.isArray(settings.symptoms), "settings.symptoms must be a list");
   check(Array.isArray(settings.effectTags), "settings.effectTags must be a list");
   return state;

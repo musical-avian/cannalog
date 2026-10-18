@@ -7,6 +7,7 @@ export const SOURCES = {
   huestis2007: { title: "Huestis 2007, Human cannabinoid pharmacokinetics", url: "https://doi.org/10.1002/cbdv.200790152" },
   ohlsson1986: { title: "Ohlsson 1986, CBD after smoking and IV", url: "https://doi.org/10.1002/bms.1200130206" },
   millar2018: { title: "Millar 2018, systematic review of CBD PK", url: "https://doi.org/10.3389/fphar.2018.01365" },
+  hackersDiet: { title: "Walker, The Hacker's Diet: exponentially smoothed trend", url: "https://www.fourmilab.ch/hackdiet/" },
 };
 
 // THCA → THC loses CO2. Mass factor = 314.5 / 358.5. CBDA → CBD has the same masses.
@@ -235,4 +236,101 @@ export function trend(now, before, higherIsBetter, threshold = SCORE_CHANGE_THRE
 export function goodness(score, higherIsBetter) {
   if (higherIsBetter) return score / 10;
   return 1 - score / 10;
+}
+
+// ---------- usage creep: is daily THC slowly going up? ----------
+
+// Trend smoothing: each day moves the trend 10% toward that day's value (Hacker's Diet, same idea as Libra).
+// Evidence: method choice, not a clinical number (docs/limits.md).
+export const TREND_SMOOTHING = 0.1;
+// Days used for the weekly rate. 4 weeks: long enough to ignore one odd week.
+export const RATE_WINDOW_DAYS = 28;
+// A weekly change under 5% of the average counts as "stable" (assumed, docs/limits.md).
+export const STABLE_RATE_FRACTION = 0.05;
+
+/**
+ * THC mg per day for each key. Days without use are 0, not a gap:
+ * for consumption, a day off is real data (unlike symptom scores).
+ * Upper end of the range (equal to lower end except in absorbed mode).
+ */
+export function dailyThcSeries(keys, byDay, mode) {
+  return keys.map((key) => {
+    const entries = byDay[key] ?? [];
+    return summarize(entries, mode).thc[1];
+  });
+}
+
+/** Exponentially smoothed trend. Starts at the first value. */
+export function smoothTrend(values, alpha = TREND_SMOOTHING) {
+  const result = [];
+  let trendValue = null;
+  for (const value of values) {
+    if (trendValue === null) trendValue = value;
+    else trendValue = trendValue + alpha * (value - trendValue);
+    result.push(trendValue);
+  }
+  return result;
+}
+
+/** Least-squares slope of values over their index (change per day). 0 if fewer than 2 values. */
+export function slope(values) {
+  const n = values.length;
+  if (n < 2) return 0;
+  const meanX = (n - 1) / 2;
+  const meanY = mean(values);
+  let numerator = 0;
+  let denominator = 0;
+  for (let x = 0; x < n; x++) {
+    numerator += (x - meanX) * (values[x] - meanY);
+    denominator += (x - meanX) ** 2;
+  }
+  return numerator / denominator;
+}
+
+/**
+ * How fast daily THC changes, from the last RATE_WINDOW_DAYS days.
+ * { perWeek: mg/day change per week, direction: "better" | "worse" | "same" }
+ * Rising use = "worse" (the goal is to stay low).
+ */
+export function weeklyRate(dailyValues) {
+  const window = dailyValues.slice(-RATE_WINDOW_DAYS);
+  const perWeek = slope(window) * 7;
+  const average = mean(window);
+  if (Math.abs(perWeek) <= STABLE_RATE_FRACTION * average) {
+    return { perWeek, direction: "same" };
+  }
+  if (perWeek > 0) return { perWeek, direction: "worse" };
+  return { perWeek, direction: "better" };
+}
+
+export function mean(values) {
+  if (values.length === 0) return 0;
+  let sum = 0;
+  for (const value of values) sum += value;
+  return sum / values.length;
+}
+
+export function median(values) {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[middle];
+  return (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+/** Number of days in `keys` with no entries. */
+export function useFreeDays(keys, byDay) {
+  return keys.filter((key) => !(byDay[key]?.length > 0)).length;
+}
+
+// Below 0.1 mg the difference is rounding noise (values are shown to 0.1 mg).
+const MIN_MG_CHANGE = 0.1;
+
+/**
+ * Compare usage now vs before (e.g. mean mg/day this week vs last). Less is better.
+ * Changes under STABLE_RATE_FRACTION of the earlier value count as "same".
+ */
+export function usageChange(now, before) {
+  const smallestRealChange = Math.max(STABLE_RATE_FRACTION * before, MIN_MG_CHANGE);
+  return trend(now, before, false, smallestRealChange);
 }
