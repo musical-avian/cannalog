@@ -1,0 +1,21 @@
+# Lint + test only. Pages serves the repo root straight from the branch (Settings → Pages → Deploy from a branch).
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx --yes @biomejs/biome@2.5.15 ci .
+      - run: node --test

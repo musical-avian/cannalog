@@ -24,6 +24,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D7 | Import merges by id (backup wins), settings kept | restore + combine devices with one code path |
 | D8 | Service worker network-first | updates appear at once; cache only for offline |
 | D9 | Scores 0–10 as tap buttons, tap again clears | fast one-handed input, "not rated" ≠ 0 |
+| D10 | Pages deploys from branch, CI only lints/tests | Actions deploy was blocked by environment rule; branch deploy needs no workflow |
 
 ## Tasks
 | Task | Status | Owner |
@@ -32,7 +33,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | UI: day / week / trends / settings, dialogs | done | claude |
 | PWA (sw, manifest), CI, docs | done | claude |
 | Merge to `main` | done | claude |
-| Enable Pages (Settings → Pages → Source: GitHub Actions) | open | user |
+| Enable Pages | done (deploy from branch) | user |
 | Re-verify PubChem CIDs | open | — |
 | PNG icons for older iOS home screen | idea (YAGNI until needed) | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
@@ -41,5 +42,6 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-18 claude: Pages switched to branch deploy → removed deploy job, added `.nojekyll`.
 - 2026-10-18 claude: Pages URL in README, pushed to `main`.
 - 2026-10-18 claude: v1 — calc/store/app, 15 tests, Playwright e2e at 390×844 (add, edit, delete+undo, week, trends, export → wipe → import roundtrip equal, offline reload).

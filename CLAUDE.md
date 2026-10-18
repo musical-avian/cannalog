@@ -42,4 +42,4 @@ make test   # node --test
 make lint   # biome ci   (make fmt to fix)
 make serve  # python http.server on :8080
 ```
-CI (`.github/workflows/pages.yml`): lint → test → deploy to Pages on `main`.
+CI (`.github/workflows/check.yml`): lint → test. Pages = "Deploy from a branch" (`main`, root): pushing to `main` publishes. `.nojekyll` = serve files as-is.
