@@ -28,7 +28,7 @@ Private medical cannabis log. Static PWA, browser-only, GitHub Pages. No framewo
 | `store.js` | data shape, validation, localStorage, JSON/CSV backup, merge |
 | `app.js` | DOM only: views, dialogs, charts, events |
 | `index.html` | markup + CSS (mobile first, light/dark) |
-| `sw.js`, `manifest.webmanifest`, `icon.svg` | offline + install |
+| `sw.js`, `manifest.webmanifest`, `icon.svg`, `icons/` | offline + install; PNGs from `make icons` (`tools/icons.mjs`) |
 | `vendor/` | uPlot 1.6.32 (MIT), vendored on purpose |
 
 ## Debug
@@ -41,6 +41,7 @@ Private medical cannabis log. Static PWA, browser-only, GitHub Pages. No framewo
 make test   # node --test
 make lint   # biome ci   (make fmt to fix)
 make serve  # python http.server on :8080
+make icons  # regenerate icons/*.png after editing icon.svg
 ```
 ## Release
 Develop on `claude/cannabis-use-logger-rtgc0v`. Bump `APP_VERSION` in app.js (shown in Settings). After `make lint` + `make test` pass: push the branch, then `git push origin HEAD:main` (fast-forward only, never force). `main` = live site.

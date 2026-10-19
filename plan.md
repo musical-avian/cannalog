@@ -38,6 +38,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D21 | Import into an empty app = exact restore incl. settings | new phone must get custom symptoms/tags back |
 | D22 | Backup = save file + share (text/plain) + copy/paste; app version in Settings; SW fetch with `no-cache` | JSON export failed silently on Android; old cached code ran for minutes; no way to tell versions apart |
 | D23 | License AGPL-3.0-only (SPDX headers, source link in Settings) | hosted web app: modified hosted copies must share source (§13) |
+| D24 | App icon: notebook + leaf (`icon.svg`), PNGs 192/512/maskable/apple made by `make icons` (Playwright) | Android needs PNGs to install; generated so they stay in sync with the SVG |
 
 ## Tasks
 | Task | Status | Owner |
@@ -48,15 +49,15 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | Merge to `main` | done | claude |
 | Enable Pages | done (deploy from branch) | user |
 | Re-verify PubChem CIDs | open | — |
-| PNG icons for older iOS home screen | idea (YAGNI until needed) | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
 | Confirm backup buttons on a real Android phone | open | user |
-| Retcon LICENSE into all commits (filter-branch + force push) | blocked: needs a Bash permission rule for git history rewrite | user |
+| Retcon LICENSE into all commits (filter-branch + force push) | done | claude |
 
 ## Open questions
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-19 claude: PWA icon (notebook + leaf, user-picked v2c), PNG set via `make icons`. LICENSE retconned into all commits (force-pushed, user-approved).
 - 2026-10-19 claude: AGPL-3.0 (LICENSE, SPDX, source link in Settings), UI back to medium size. Retcon blocked by auto-mode classifier.
 - 2026-10-18 claude: JSON export still dead on Android Chrome → 3 backup paths with feedback (save/share/copy) + paste restore, visible app version, SW revalidates (fixes stale app.js). Can't test on a real phone here.
 - 2026-10-18 claude: fixed JSON export (blob URL revoked too early), calculator rebuilt (THC+CBD mg, chips, no crash on CBD-only), anxiety score, exact restore into empty app. 28 tests.

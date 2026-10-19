@@ -2,7 +2,7 @@
 PORT  ?= 8080
 BIOME := npx --yes @biomejs/biome@2.5.15
 
-.PHONY: help serve test lint fmt
+.PHONY: help serve test lint fmt icons
 
 help: ## list targets
 	@grep -E '^[a-z]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-8s %s\n", $$1, $$2}'
@@ -18,3 +18,6 @@ lint: ## lint + format check
 
 fmt: ## apply formatting and safe fixes
 	$(BIOME) check --write .
+
+icons: ## make PNG app icons from icon.svg (needs: npm i -g playwright)
+	NODE_PATH=$$(npm root -g) node tools/icons.mjs
