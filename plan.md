@@ -30,13 +30,14 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D13 | Creep = EMA trend (α 0.1, Hacker's Diet/Libra) + 28-day regression rate + mean/median + use-free days | robust to single heavy days; libra-app.eu unreachable from sandbox, method from its origin |
 | D14 | Use-free days count as 0 mg in consumption math | a day off is real data; skipping it would hide reductions |
 | D15 | Arrows show direction, color shows good/bad | one rule for scores and usage |
-| D16 | Mobile sizing: 18px base, 48px tap targets, score grid 6×2 | Pixel 7 feedback: too small |
+| D16 | Mobile sizing: 16px base, 44px tap targets, score grid 6×2 | first "too small" report was desktop mode; 18px/48px then felt too big |
 | D17 | Calculator: tap 1–2 products, type THC mg + CBD mg, exact 2×2 solve, rounded to measurable steps, shows real totals | user: ratio input was confusing; mg is what people think in |
 | D18 | Cravings as entries without dose (`noDose`) | a resisted craving has no dose but matters most |
 | D19 | New optional fields (`watch`, `noDose`, `watchTags`) without version bump | older data stays valid as-is; same rule as theme/ceiling |
 | D20 | One-time settings upgrade (`symptomsVersion`) adds new default symptoms (anxiety) | existing users get it; deleting it sticks |
 | D21 | Import into an empty app = exact restore incl. settings | new phone must get custom symptoms/tags back |
 | D22 | Backup = save file + share (text/plain) + copy/paste; app version in Settings; SW fetch with `no-cache` | JSON export failed silently on Android; old cached code ran for minutes; no way to tell versions apart |
+| D23 | License AGPL-3.0-only (SPDX headers, source link in Settings) | hosted web app: modified hosted copies must share source (§13) |
 
 ## Tasks
 | Task | Status | Owner |
@@ -50,11 +51,13 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | PNG icons for older iOS home screen | idea (YAGNI until needed) | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
 | Confirm backup buttons on a real Android phone | open | user |
+| Retcon LICENSE into all commits (filter-branch + force push) | blocked: needs a Bash permission rule for git history rewrite | user |
 
 ## Open questions
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-19 claude: AGPL-3.0 (LICENSE, SPDX, source link in Settings), UI back to medium size. Retcon blocked by auto-mode classifier.
 - 2026-10-18 claude: JSON export still dead on Android Chrome → 3 backup paths with feedback (save/share/copy) + paste restore, visible app version, SW revalidates (fixes stale app.js). Can't test on a real phone here.
 - 2026-10-18 claude: fixed JSON export (blob URL revoked too early), calculator rebuilt (THC+CBD mg, chips, no crash on CBD-only), anxiety score, exact restore into empty app. 28 tests.
 - 2026-10-18 claude: dose calculator (1–2 products, ratio mixing), watch tags + no-dose entries on day/week/trends, reasons for 10%/5%. 26 tests.

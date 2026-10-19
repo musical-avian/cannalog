@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Pure math: how much THC/CBD an entry contains, day/week totals, trends. No DOM, no storage.
 // Every number here has a source in docs/sources.md (test enforces it).
 

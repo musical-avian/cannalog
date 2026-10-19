@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Data shape, validation, local storage, JSON/CSV backup. No DOM. Shape is documented in docs/data.md.
 
 import { activeMg, dayKey, isDose, productMg } from "./calc.js";

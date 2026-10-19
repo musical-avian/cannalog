@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // Offline support. Network first, revalidated every time (so updates show up at once), cache as fallback when offline.
 // Bump CACHE when the file list changes.
 

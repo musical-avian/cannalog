@@ -16,3 +16,7 @@ Private medical cannabis log. Runs in the browser, installable, offline. Data st
 Not medical or dosing advice. Docs: [`docs/`](docs). Dev: `make test`, `make lint`, `make serve`.
 
 Install on phone: open the Pages URL → browser menu → "Add to Home Screen".
+
+## License
+[AGPL-3.0-only](LICENSE). Copyright (C) 2026 the Cannalog authors. Free software: use, study, change, share; if you host a modified version, offer its source to its users.
+Vendored uPlot keeps its MIT license (`vendor/uPlot.LICENSE`).

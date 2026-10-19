@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: AGPL-3.0-only
 // DOM only. All math lives in calc.js, all data rules in store.js.
 // Debug: open the console and run cannalog.dump(), or add ?debug to the URL.
 
@@ -53,7 +54,9 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-18.7";
+const APP_VERSION = "2026-10-19.1";
+// AGPL-3.0 §13: people using the hosted app must be offered the source.
+const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
 const SYMPTOM_COLORS = ["#e8590c", "#ae3ec9", "#1098ad", "#f59f00", "#d6336c", "#5c940d"];
 
@@ -87,7 +90,7 @@ function dailyLimit() {
   return state.settings.dailyLimitMg ?? null;
 }
 
-const CHART_FONT = "15px system-ui, sans-serif";
+const CHART_FONT = "13px system-ui, sans-serif";
 const MARKER_HEIGHT = 0.95; // watch markers sit near the top of the mg chart (scale 0–1), above the bars
 
 /** Save, then redraw. Every change goes through here. */
@@ -525,7 +528,7 @@ function renderTrends() {
     stroke: color("--muted"),
     font: CHART_FONT,
     labelFont: CHART_FONT,
-    size: 56,
+    size: 48,
     grid: { stroke: color("--line") },
     ticks: { stroke: color("--line") },
   };
@@ -576,7 +579,7 @@ function renderTrends() {
     new uPlot(
       {
         width,
-        height: 280,
+        height: 240,
         cursor,
         hooks,
         scales: { x: { time: true }, share: { range: [0, 100] }, marker: { range: [0, 1] } },
@@ -592,7 +595,7 @@ function renderTrends() {
     new uPlot(
       {
         width,
-        height: 240,
+        height: 200,
         cursor,
         hooks,
         scales: { x: { time: true }, y: { range: [0, 10] } },
@@ -698,6 +701,7 @@ function renderSettings() {
       <textarea id="paste-backup" rows="2" placeholder="…or paste backup text here"></textarea>
       <button type="button" id="paste-import">Restore pasted text</button>
       <p class="muted">For spreadsheets: <button type="button" id="export-csv">Save CSV</button></p>
+      <p class="muted">Free software (AGPL-3.0). Source: <a href="${SOURCE_URL}">${SOURCE_URL}</a></p>
       <p class="muted">${state.entries.length} entries stored. <span id="persist-status"></span> App version ${APP_VERSION}.</p>
       <button class="danger" id="delete-all">Delete all data</button>
     </div>
