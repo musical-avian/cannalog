@@ -164,9 +164,7 @@
             <label class="field" style="flex: 1"><span>Route</span><select name="route"><option value="inhaled">inhaled</option><option value="oral">oral</option></select></label>
           </div>
           <label class="row"><input name="isLoad" type="checkbox" /> Vaporizer load (use it through the day)</label>
-          <label class="field" id="load-used-field" hidden><span>Load used</span>
-            <select name="loadUsed"><option value="open">still open</option><option value="1">all used</option><option value="0.75">¾ used</option><option value="0.5">½ used</option><option value="0.25">¼ used</option></select>
-          </label>
+          <label class="row" id="load-open-field" hidden><input name="loadOpen" type="checkbox" /> Load still open</label>
         </div>
         <label class="field"><span>Time</span><input name="time" type="datetime-local" required /></label>
         <p class="muted" id="entry-preview"></p>

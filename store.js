@@ -11,7 +11,8 @@ export const FORMS = {
   edible: { amountUnit: "units", strengthUnit: "mg/unit", defaultRoute: "oral", step: 0.25 },
 };
 export const ROUTES = ["inhaled", "oral"];
-// How much of a vaporizer load was used when it was emptied: all, ¾, ½, ¼.
+// How much of a vaporizer load counts. New loads always use 1 (full load, see docs/limits.md);
+// ¾, ½, ¼ stay valid for loads logged with an earlier version that asked for a guess.
 export const LOAD_USED_FRACTIONS = [1, 0.75, 0.5, 0.25];
 export const THEMES = ["auto", "light", "dark"]; // auto = follow the phone setting
 

@@ -40,7 +40,7 @@ Entry = {
 }
 
 // Vaporizer load: a normal dose entry with
-//   load: { open: true|false, used: 1 | 0.75 | 0.5 | 0.25 }   // used = 1 while open
+//   load: { open: true|false, used: 1 }   // new loads: always 1; 0.75/0.5/0.25 only in older data
 // Sip = one use of a load: no strain/amount/route; sipOf must be an existing load's id.
 Sip = { id, t, sipOf: "load id", note, scores, effects, watch }
 

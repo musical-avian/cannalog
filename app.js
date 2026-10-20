@@ -38,7 +38,6 @@ import {
   emptyState,
   FORMS,
   fromJson,
-  LOAD_USED_FRACTIONS,
   load,
   merge,
   newId,
@@ -57,7 +56,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-20.1";
+const APP_VERSION = "2026-10-20.2";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -297,9 +296,6 @@ function limitMeter(thcMg) {
   </div>`;
 }
 
-const USED_LABELS = { 1: "all", 0.75: "¾", 0.5: "½", 0.25: "¼" };
-let closingLoadId = null; // load whose "how much was used?" buttons are showing
-
 function doseTitle(entry) {
   if (isSip(entry)) return `sip · ${esc(entry.strain.name)}`;
   if (entry.load) return `${esc(entry.strain.name)} load`;
@@ -314,23 +310,16 @@ function doseAmountText(entry) {
   return `${amountText(entry)} of ${amountText(load)}`;
 }
 
-/** Open vaporizer loads (any day): one tap logs a sip, "Empty…" closes the load. */
+/** Open vaporizer loads (any day): one tap logs a sip, "Empty" closes the load. */
 function openLoadsBanner() {
   const openLoads = state.entries.filter((e) => e.load?.open);
   return openLoads
     .map((load) => {
       const uses = 1 + state.entries.filter((e) => e.sipOf === load.id).length;
       const since = new Date(load.t).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
-      const picker =
-        closingLoadId === load.id
-          ? `<div class="row"><span>How much was used?</span>${LOAD_USED_FRACTIONS.map(
-              (used) => `<button data-close-load="${load.id}" data-used="${used}">${USED_LABELS[used]}</button>`,
-            ).join("")}</div>`
-          : "";
       return `<div class="card load-banner">
         <div class="row spread"><b>${esc(load.strain.name)} · ${amountText(load)} load</b><span class="muted">since ${since} · ${uses} ${uses === 1 ? "use" : "uses"}</span></div>
-        <div class="row"><button class="primary" data-sip="${load.id}">Sip now</button><button data-empty-load="${load.id}">Empty…</button></div>
-        ${picker}
+        <div class="row"><button class="primary" data-sip="${load.id}">Sip now</button><button data-empty-load="${load.id}">Empty</button></div>
       </div>`;
     })
     .join("");
@@ -347,10 +336,13 @@ function addSip(loadId) {
   });
 }
 
-function closeLoad(loadId, used) {
+/**
+ * Close a load. The full load always counts: how much THC a dry-herb vape really extracts is
+ * unknown, and a consistent upper bound keeps trends honest (docs/limits.md).
+ */
+function closeLoad(loadId) {
   const load = state.entries.find((e) => e.id === loadId);
-  load.load = { open: false, used };
-  closingLoadId = null;
+  load.load = { open: false, used: 1 };
   commit();
 }
 
@@ -1008,8 +1000,8 @@ function openEntryDialog(entry) {
   form.amount.value = entry?.amount ?? "";
   form.route.value = entry?.route ?? defaultRoute();
   form.isLoad.checked = Boolean(entry?.load);
-  form.loadUsed.value = loadUsedValue(entry);
-  $("#load-used-field").hidden = !entry?.load; // only when editing an existing load
+  form.loadOpen.checked = Boolean(entry?.load?.open);
+  $("#load-open-field").hidden = !entry?.load; // only when editing an existing load
   form.time.value = localInputTime(entry ? new Date(entry.t) : defaultEntryTime());
   form.note.value = entry?.note ?? "";
   $("#entry-title").textContent = entry ? "Edit entry" : "New entry";
@@ -1017,12 +1009,6 @@ function openEntryDialog(entry) {
   renderEntryChoices();
   updateDoseFields();
   $("#entry-dialog").showModal();
-}
-
-/** Select value for "Load used": "open" while open, else the used fraction as text. */
-function loadUsedValue(entry) {
-  if (!entry?.load || entry.load.open) return "open";
-  return String(entry.load.used);
 }
 
 function editingSip() {
@@ -1087,13 +1073,19 @@ function readEntryForm() {
     amount: Number(form.amount.value),
     route: form.route.value,
   };
-  if (form.isLoad.checked) dose.load = readLoadField(form.loadUsed.value);
+  if (form.isLoad.checked) dose.load = readLoadField(form);
   return dose;
 }
 
-function readLoadField(value) {
-  if (value === "open") return { open: true, used: 1 };
-  return { open: false, used: Number(value) };
+/**
+ * New loads start open. Editing: the "still open" box decides.
+ * Old closed loads may carry a guessed fraction (¾, ½, ¼) from an earlier version; keep it unless reopened.
+ */
+function readLoadField(form) {
+  if (!editingEntry?.load) return { open: true, used: 1 };
+  const open = form.loadOpen.checked;
+  if (open) return { open: true, used: 1 };
+  return { open: false, used: editingEntry.load.used };
 }
 
 function updateEntryPreview() {
@@ -1204,9 +1196,8 @@ function onViewClick(event) {
   const data = target.dataset;
 
   if (data.sip) return addSip(data.sip);
-  if (data.emptyLoad) closingLoadId = closingLoadId === data.emptyLoad ? null : data.emptyLoad;
-  else if (data.closeLoad) return closeLoad(data.closeLoad, Number(data.used));
-  else if (data.day === "today") shownDay = dayKey(new Date());
+  if (data.emptyLoad) return closeLoad(data.emptyLoad);
+  if (data.day === "today") shownDay = dayKey(new Date());
   else if (data.day) shownDay = addDays(shownDay, Number(data.day));
   else if (data.week) shownWeek = addDays(shownWeek, 7 * Number(data.week));
   else if (data.range) trendDays = Number(data.range);

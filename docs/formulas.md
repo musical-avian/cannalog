@@ -58,6 +58,6 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 ## 9. Vaporizer load (fill once, use through the day)
 - Load = dose entry with `load`. Each "Sip now" = one more use of it. The fill counts as the first use.
 - `share = amount × used / (1 + sips)`; every use gets that share at its own time (`expandLoads`). So a sip after midnight counts on the next day.
-- While open, `used` = 1 and the share shrinks with each sip; the day total stays the full load.
-- "Empty…" sets `used` = all / ¾ / ½ / ¼ → all shares scale down.
+- The full load always counts (`used` = 1); the share shrinks with each sip, the day total stays the full load.
+- "Empty" just closes the load. No "how much was used" guess: for flower in a dry-herb vape that is unknowable, and a consistent upper bound keeps trends honest. Loads logged by an earlier version with ¾/½/¼ keep that value.
 - All math (day, week, trends, creep, CSV) runs on the expanded list; the saved data keeps the raw load + sips.

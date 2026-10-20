@@ -22,6 +22,7 @@ Personal log. Not medical or dosing advice.
 | Personal ceiling | the user's own number, not a recommendation |
 | Calculator amount steps (1 mg, 0.05 ml, ¼ unit) | what can realistically be measured (scale, ~1 drop, cut edible) |
 | "urge resisted" = the one watch tag where more is good | design choice |
+| Vaporizer load counts fully | how much a dry-herb vape really extracts is unknown (temperature, draws); a consistent upper bound keeps trends comparable |
 
 ## Not modeled
 - Blood levels over time (see sibling project Halflives).

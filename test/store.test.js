@@ -148,3 +148,11 @@ test("vaporizer load + sips: valid, orphan sip rejected, CSV has split mg", () =
   s.entries[1].sipOf = "gone";
   assert.throws(() => validate(s), /entry s1: sip of load gone, but that load does not exist/);
 });
+
+test("closed vaporizer load counting fully is valid; old guessed fractions stay valid", () => {
+  const s = sample();
+  s.entries[0].load = { open: false, used: 1 };
+  assert.doesNotThrow(() => validate(s));
+  s.entries[0].load.used = 0.5; // written by an earlier version
+  assert.doesNotThrow(() => validate(s));
+});
