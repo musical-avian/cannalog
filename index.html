@@ -155,13 +155,18 @@
     <dialog id="entry-dialog">
       <form id="entry-form" method="dialog">
         <div class="row spread"><h2 id="entry-title">New entry</h2><button type="submit" value="cancel" formnovalidate>✕</button></div>
-        <label class="row"><input name="noDose" type="checkbox" /> No dose (craving / event only)</label>
+        <p class="muted" id="sip-info" hidden></p>
+        <label class="row" id="no-dose-row"><input name="noDose" type="checkbox" /> No dose (craving / event only)</label>
         <div id="dose-fields">
           <label class="field"><span>Strain / product</span><select name="strainId"></select></label>
           <div class="row" style="flex-wrap: nowrap">
             <label class="field" style="flex: 1"><span id="amount-label">Amount</span><input name="amount" type="number" inputmode="decimal" step="any" min="0" /></label>
             <label class="field" style="flex: 1"><span>Route</span><select name="route"><option value="inhaled">inhaled</option><option value="oral">oral</option></select></label>
           </div>
+          <label class="row"><input name="isLoad" type="checkbox" /> Vaporizer load (use it through the day)</label>
+          <label class="field" id="load-used-field" hidden><span>Load used</span>
+            <select name="loadUsed"><option value="open">still open</option><option value="1">all used</option><option value="0.75">¾ used</option><option value="0.5">½ used</option><option value="0.25">¼ used</option></select>
+          </label>
         </div>
         <label class="field"><span>Time</span><input name="time" type="datetime-local" required /></label>
         <p class="muted" id="entry-preview"></p>

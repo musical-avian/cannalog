@@ -131,3 +131,20 @@ test("restore into an empty app keeps the backup's own settings", () => {
   assert.deepEqual(restored.settings, backup.settings);
   assert.deepEqual(restored.entries, backup.entries);
 });
+
+test("vaporizer load + sips: valid, orphan sip rejected, CSV has split mg", () => {
+  const s = sample();
+  s.entries[0].note = ""; // the sample note has a line break, which would split the CSV row below
+  s.entries[0].load = { open: true, used: 1 };
+  s.entries.push({ id: "s1", t: "2026-10-18T12:00:00.000Z", sipOf: "e1", note: "", scores: {}, effects: [], watch: [] });
+  assert.doesNotThrow(() => validate(s));
+  const csv = toCsv(s).split("\n");
+  assert.equal(csv.length, 3); // header + load + sip
+  assert.match(csv[2], /,e1,/); // sip row points to its load
+  assert.match(csv[2], /,50,/); // 100 mg load split over 2 uses
+  s.entries[0].load.used = 0.3;
+  assert.throws(() => validate(s), /load.used 0.3 must be one of/);
+  s.entries[0].load.used = 1;
+  s.entries[1].sipOf = "gone";
+  assert.throws(() => validate(s), /entry s1: sip of load gone, but that load does not exist/);
+});

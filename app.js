@@ -11,9 +11,11 @@ import {
   dayRange,
   dayStart,
   entriesBetween,
+  expandLoads,
   goodness,
   groupByDay,
   isDose,
+  isSip,
   mean,
   median,
   mgPerUnit,
@@ -36,6 +38,7 @@ import {
   emptyState,
   FORMS,
   fromJson,
+  LOAD_USED_FRACTIONS,
   load,
   merge,
   newId,
@@ -54,7 +57,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-19.2";
+const APP_VERSION = "2026-10-20.1";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -102,6 +105,11 @@ function commit() {
     alert(`Could not save on this device: ${error.message}\nExport a JSON backup now.`);
   }
   render();
+}
+
+/** Entries for all math: vaporizer loads split over their sips (calc.js expandLoads). Raw state.entries is for editing/saving. */
+function mathEntries() {
+  return expandLoads(state.entries);
 }
 
 function strainById(id) {
@@ -289,8 +297,65 @@ function limitMeter(thcMg) {
   </div>`;
 }
 
+const USED_LABELS = { 1: "all", 0.75: "¾", 0.5: "½", 0.25: "¼" };
+let closingLoadId = null; // load whose "how much was used?" buttons are showing
+
+function doseTitle(entry) {
+  if (isSip(entry)) return `sip · ${esc(entry.strain.name)}`;
+  if (entry.load) return `${esc(entry.strain.name)} load`;
+  return esc(entry.strain.name);
+}
+
+/** Amount column. For loads and sips: this use's share of the load (math entries carry the share as amount). */
+function doseAmountText(entry) {
+  if (!entry.load && !isSip(entry)) return `${amountText(entry)} ${entry.route}`;
+  const loadId = entry.sipOf ?? entry.id;
+  const load = state.entries.find((e) => e.id === loadId);
+  return `${amountText(entry)} of ${amountText(load)}`;
+}
+
+/** Open vaporizer loads (any day): one tap logs a sip, "Empty…" closes the load. */
+function openLoadsBanner() {
+  const openLoads = state.entries.filter((e) => e.load?.open);
+  return openLoads
+    .map((load) => {
+      const uses = 1 + state.entries.filter((e) => e.sipOf === load.id).length;
+      const since = new Date(load.t).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+      const picker =
+        closingLoadId === load.id
+          ? `<div class="row"><span>How much was used?</span>${LOAD_USED_FRACTIONS.map(
+              (used) => `<button data-close-load="${load.id}" data-used="${used}">${USED_LABELS[used]}</button>`,
+            ).join("")}</div>`
+          : "";
+      return `<div class="card load-banner">
+        <div class="row spread"><b>${esc(load.strain.name)} · ${amountText(load)} load</b><span class="muted">since ${since} · ${uses} ${uses === 1 ? "use" : "uses"}</span></div>
+        <div class="row"><button class="primary" data-sip="${load.id}">Sip now</button><button data-empty-load="${load.id}">Empty…</button></div>
+        ${picker}
+      </div>`;
+    })
+    .join("");
+}
+
+function addSip(loadId) {
+  const sip = { id: newId(), t: new Date().toISOString(), sipOf: loadId, note: "", scores: {}, effects: [], watch: [] };
+  state.entries.push(sip);
+  shownDay = dayKey(sip.t);
+  commit();
+  toast("Sip logged. Tap it to add how you feel.", () => {
+    state.entries = state.entries.filter((e) => e.id !== sip.id);
+    commit();
+  });
+}
+
+function closeLoad(loadId, used) {
+  const load = state.entries.find((e) => e.id === loadId);
+  load.load = { open: false, used };
+  closingLoadId = null;
+  commit();
+}
+
 function renderDay() {
-  const entries = groupByDay(state.entries)[shownDay] ?? [];
+  const entries = groupByDay(mathEntries())[shownDay] ?? [];
   const label = shownDay === dayKey(new Date()) ? "Today" : dayStart(shownDay).toDateString();
 
   // Running total: what the day adds up to after each entry.
@@ -313,7 +378,7 @@ function renderDay() {
       return `<div class="card entry no-dose" data-id="${entry.id}"><b>${time} no dose</b>${details}</div>`;
     }
     return `<div class="card entry" data-id="${entry.id}">
-      <div class="row spread"><b>${time} ${esc(entry.strain.name)}</b><span class="muted">${amountText(entry)} ${entry.route}</span></div>
+      <div class="row spread"><b>${time} ${doseTitle(entry)}</b><span class="muted">${doseAmountText(entry)}</span></div>
       <div class="row spread">
         <span><span class="thc">${rangeText(active.thc)}</span> / <span class="cbd">${rangeText(active.cbd)}</span> mg</span>
         <span class="muted">day: ${rangeText(runningThc)} / ${rangeText(runningCbd)} mg</span>
@@ -323,6 +388,7 @@ function renderDay() {
   });
 
   $("#view-day").innerHTML = `
+    ${openLoadsBanner()}
     <div class="row spread">
       <button data-day="-1" aria-label="Previous day">‹</button>
       <b>${esc(label)}</b>
@@ -368,9 +434,10 @@ function watchRows(now, before) {
 
 function renderWeek() {
   const lastDay = addDays(shownWeek, 6);
-  const thisWeek = summarize(entriesBetween(state.entries, shownWeek, lastDay), mode());
-  const prevWeek = summarize(entriesBetween(state.entries, addDays(shownWeek, -7), addDays(shownWeek, -1)), mode());
-  const byDay = groupByDay(state.entries);
+  const entries = mathEntries();
+  const thisWeek = summarize(entriesBetween(entries, shownWeek, lastDay), mode());
+  const prevWeek = summarize(entriesBetween(entries, addDays(shownWeek, -7), addDays(shownWeek, -1)), mode());
+  const byDay = groupByDay(entries);
   const symptoms = state.settings.symptoms;
 
   const scoreCell = (summary, symptom) => {
@@ -418,7 +485,7 @@ function renderWeek() {
         `<div class="row spread"><span class="chip ${e.good ? "good" : "bad"}">${esc(e.tag)}</span><span>${e.now}× ${trendSpan(e.now, e.before, e.good, 1)} <span class="muted">(prev ${e.before})</span></span></div>`,
     );
 
-  const notes = entriesBetween(state.entries, shownWeek, lastDay)
+  const notes = entriesBetween(entries, shownWeek, lastDay)
     .filter((e) => e.note)
     .sort((a, b) => a.t.localeCompare(b.t))
     .map(
@@ -469,8 +536,9 @@ function usageCard(byDay) {
 
 /** Watch tags in the last 7 days vs the 7 before. Empty if none were logged in either. */
 function watchLast7VsPrev7(today) {
-  const last7 = summarize(entriesBetween(state.entries, addDays(today, -6), today), chartMode()).watch;
-  const prev7 = summarize(entriesBetween(state.entries, addDays(today, -13), addDays(today, -7)), chartMode()).watch;
+  const entries = mathEntries();
+  const last7 = summarize(entriesBetween(entries, addDays(today, -6), today), chartMode()).watch;
+  const prev7 = summarize(entriesBetween(entries, addDays(today, -13), addDays(today, -7)), chartMode()).watch;
   const rows = watchRows(last7, prev7);
   if (!rows) return "";
   return `<p class="muted">Watch, last 7 days</p>${rows}`;
@@ -491,7 +559,7 @@ function renderTrends() {
 
   const today = dayKey(new Date());
   const keys = dayRange(addDays(today, -(trendDays - 1)), today);
-  const byDay = groupByDay(state.entries);
+  const byDay = groupByDay(mathEntries());
   const days = keys.map((key) => summarize(byDay[key] ?? [], chartMode()));
   const x = keys.map((key) => dayStart(key).getTime() / 1000);
   const thc = days.map((d) => (d.count ? d.thc[1] : null));
@@ -876,7 +944,15 @@ function isNoDoseChecked() {
 
 function updateDoseFields() {
   const form = $("#entry-form");
-  const noDose = isNoDoseChecked();
+  // A sip has no product of its own: it is one use of a load, so only time, scores, tags and note are editable.
+  const sip = editingSip();
+  $("#no-dose-row").hidden = sip;
+  $("#sip-info").hidden = !sip;
+  if (sip) {
+    const load = state.entries.find((e) => e.id === editingEntry.sipOf);
+    $("#sip-info").textContent = `One use of the ${load.strain.name} load (${amountText(load)}).`;
+  }
+  const noDose = isNoDoseChecked() || sip;
   $("#dose-fields").hidden = noDose;
   form.amount.required = !noDose; // hidden required fields would block saving
   updateEntryPreview();
@@ -885,7 +961,7 @@ function updateDoseFields() {
 function strainsByLastUse() {
   const lastUse = {};
   for (const entry of state.entries) {
-    if (!isDose(entry)) continue;
+    if (!isDose(entry) || isSip(entry)) continue; // no product of their own
     const id = entry.strain.id;
     if (!lastUse[id] || entry.t > lastUse[id]) lastUse[id] = entry.t;
   }
@@ -931,6 +1007,9 @@ function openEntryDialog(entry) {
 
   form.amount.value = entry?.amount ?? "";
   form.route.value = entry?.route ?? defaultRoute();
+  form.isLoad.checked = Boolean(entry?.load);
+  form.loadUsed.value = loadUsedValue(entry);
+  $("#load-used-field").hidden = !entry?.load; // only when editing an existing load
   form.time.value = localInputTime(entry ? new Date(entry.t) : defaultEntryTime());
   form.note.value = entry?.note ?? "";
   $("#entry-title").textContent = entry ? "Edit entry" : "New entry";
@@ -938,6 +1017,16 @@ function openEntryDialog(entry) {
   renderEntryChoices();
   updateDoseFields();
   $("#entry-dialog").showModal();
+}
+
+/** Select value for "Load used": "open" while open, else the used fraction as text. */
+function loadUsedValue(entry) {
+  if (!entry?.load || entry.load.open) return "open";
+  return String(entry.load.used);
+}
+
+function editingSip() {
+  return Boolean(editingEntry && isSip(editingEntry));
 }
 
 function defaultRoute() {
@@ -988,15 +1077,23 @@ function readEntryForm() {
     effects: [...draftEffects],
     watch: [...draftWatch],
   };
+  if (editingSip()) return { ...common, sipOf: editingEntry.sipOf };
   if (isNoDoseChecked()) return { ...common, noDose: true };
   const strain = selectedStrain();
   if (!strain) throw new Error("Pick a strain / product, or tick 'No dose'.");
-  return {
+  const dose = {
     ...common,
     strain: { ...strain }, // copy: the entry keeps the label values it was logged with
     amount: Number(form.amount.value),
     route: form.route.value,
   };
+  if (form.isLoad.checked) dose.load = readLoadField(form.loadUsed.value);
+  return dose;
+}
+
+function readLoadField(value) {
+  if (value === "open") return { open: true, used: 1 };
+  return { open: false, used: Number(value) };
 }
 
 function updateEntryPreview() {
@@ -1022,11 +1119,15 @@ function saveEntryFromDialog() {
   commit();
 }
 
+/** Delete an entry. A load takes its sips with it (they make no sense alone). One Undo brings all back. */
 function deleteEntry(entry) {
-  state.entries = state.entries.filter((e) => e.id !== entry.id);
+  const removed = state.entries.filter((e) => e.id === entry.id || e.sipOf === entry.id);
+  const removedIds = new Set(removed.map((e) => e.id));
+  state.entries = state.entries.filter((e) => !removedIds.has(e.id));
   commit();
-  toast("Entry deleted", () => {
-    state.entries.push(entry);
+  const sipCount = removed.length - 1;
+  toast(sipCount > 0 ? `Load and ${sipCount} sips deleted` : "Entry deleted", () => {
+    state.entries.push(...removed);
     commit();
   });
 }
@@ -1102,7 +1203,10 @@ function onViewClick(event) {
   if (!target) return;
   const data = target.dataset;
 
-  if (data.day === "today") shownDay = dayKey(new Date());
+  if (data.sip) return addSip(data.sip);
+  if (data.emptyLoad) closingLoadId = closingLoadId === data.emptyLoad ? null : data.emptyLoad;
+  else if (data.closeLoad) return closeLoad(data.closeLoad, Number(data.used));
+  else if (data.day === "today") shownDay = dayKey(new Date());
   else if (data.day) shownDay = addDays(shownDay, Number(data.day));
   else if (data.week) shownWeek = addDays(shownWeek, 7 * Number(data.week));
   else if (data.range) trendDays = Number(data.range);

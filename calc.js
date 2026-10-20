@@ -40,6 +40,7 @@ export const CALC_MODES = {
  */
 export function productMg(entry) {
   if (!isDose(entry)) return { thc: 0, cbd: 0 }; // craving / event entry: nothing taken
+  if (!entry.strain) throw new Error(`entry ${entry.id} has no product. Sips need expandLoads() before any math.`);
   const strain = entry.strain;
   if (strain.form === "flower") {
     return { thc: (entry.amount * strain.thc) / 100, cbd: (entry.amount * strain.cbd) / 100 };
@@ -408,4 +409,43 @@ function planOneProduct(strain, thcMg, cbdMg, mode) {
     return { parts: [{ strain, amount: cbdMg / perUnit.cbd }] };
   }
   return { error: "Enter THC mg or CBD mg." };
+}
+
+// ---------- vaporizer loads: one fill, used several times ----------
+
+/** true for a "sip": one use of an earlier vaporizer load (has no amount of its own). */
+export function isSip(entry) {
+  return typeof entry.sipOf === "string";
+}
+
+/**
+ * Entries ready for all math. A vaporizer load and its sips share the load's mg evenly:
+ * share = amount × used / (1 + number of sips). The fill itself counts as the first use.
+ * Each sip gets the load's strain/route and the share as its amount, so every other
+ * function (summaries, trends, CSV) works on the result without knowing about loads.
+ * Input entries are not changed.
+ */
+export function expandLoads(entries) {
+  const sipsByLoad = {};
+  for (const entry of entries) {
+    if (!isSip(entry)) continue;
+    if (!sipsByLoad[entry.sipOf]) sipsByLoad[entry.sipOf] = [];
+    sipsByLoad[entry.sipOf].push(entry);
+  }
+
+  const result = [];
+  for (const entry of entries) {
+    if (isSip(entry)) continue; // added below, together with their load
+    if (!entry.load) {
+      result.push(entry);
+      continue;
+    }
+    const sips = sipsByLoad[entry.id] ?? [];
+    const share = (entry.amount * entry.load.used) / (1 + sips.length);
+    result.push({ ...entry, amount: share });
+    for (const sip of sips) {
+      result.push({ ...sip, strain: entry.strain, route: entry.route, amount: share });
+    }
+  }
+  return result;
 }

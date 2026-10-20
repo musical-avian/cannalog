@@ -6,9 +6,11 @@ import {
   DECARB_FACTOR,
   dailyThcSeries,
   dayRange,
+  expandLoads,
   goodness,
   groupByDay,
   isDose,
+  isSip,
   mean,
   median,
   planForMg,
@@ -207,4 +209,45 @@ test("no-dose entries add no mg, are not uses, keep watch tags, don't break use-
   assert.deepEqual(s.watch, { craving: 1 });
   assert.equal(isDose(craving), false);
   assert.equal(useFreeDays(["2026-10-18"], groupByDay([craving])), 1);
+});
+
+test("vaporizer load: mg split evenly over fill + sips, scaled by how much was used", () => {
+  const flower = { id: "f", name: "Flower", form: "flower", thc: 20, cbd: 0, acid: false };
+  const at = (day, hour) => new Date(2026, 9, day, hour).toISOString();
+  const load = {
+    id: "L",
+    t: at(18, 8),
+    strain: flower,
+    amount: 150,
+    route: "inhaled",
+    note: "",
+    scores: {},
+    effects: [],
+    load: { open: true, used: 1 },
+  };
+  const sip = (id, day, hour) => ({ id, t: at(day, hour), sipOf: "L", note: "", scores: {}, effects: [], watch: [] });
+
+  assert.deepEqual(
+    expandLoads([load]).map((e) => e.amount),
+    [150],
+  ); // no sips yet: all at fill time
+  const expanded = expandLoads([load, sip("s1", 18, 12), sip("s2", 18, 20)]);
+  assert.deepEqual(
+    expanded.map((e) => e.amount),
+    [50, 50, 50],
+  );
+  assert.equal(expanded[1].strain.name, "Flower");
+  assert.deepEqual(summarize(expanded, "raw").thc, [30, 30]); // 150 mg × 20%
+  assert.equal(summarize(expanded, "raw").count, 3); // every sip is a use
+
+  const halfUsed = { ...load, load: { open: false, used: 0.5 } };
+  assert.deepEqual(
+    expandLoads([halfUsed, sip("s1", 18, 12), sip("s2", 18, 20)]).map((e) => e.amount),
+    [25, 25, 25],
+  );
+
+  const afterMidnight = groupByDay(expandLoads([load, sip("s1", 19, 1)]));
+  assert.equal(afterMidnight["2026-10-19"][0].amount, 75); // the sip counts on the day it happened
+  assert.equal(useFreeDays(["2026-10-19"], afterMidnight), 0);
+  assert.equal(isSip(sip("x", 18, 9)), true);
 });

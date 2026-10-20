@@ -39,6 +39,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D22 | Backup = save file + share (text/plain) + copy/paste; app version in Settings; SW fetch with `no-cache` | JSON export failed silently on Android; old cached code ran for minutes; no way to tell versions apart |
 | D23 | License AGPL-3.0-only (SPDX headers, source link in Settings) | hosted web app: modified hosted copies must share source (§13) |
 | D24 | App icon: notebook + leaf (`icon.svg`), PNGs 192/512/maskable/apple made by `make icons` (Playwright) | Android needs PNGs to install; generated so they stay in sync with the SVG |
+| D25 | Vaporizer load + sips, mg split evenly (`expandLoads`), used fraction on empty | one fill used all day; timeline + day totals stay right; math code unchanged |
 
 ## Tasks
 | Task | Status | Owner |
@@ -50,6 +51,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | Enable Pages | done (deploy from branch) | user |
 | Re-verify PubChem CIDs | open | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
+| AVB tracking (kept amount, stash, user-entered strength) | idea — no sourced potency for AVB | — |
 | Confirm backup buttons on a real Android phone | open | user |
 | Retcon LICENSE into all commits (filter-branch + force push) | done | claude |
 
@@ -57,6 +59,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-20 claude: vaporizer load + sips (split mg, used fraction on empty, banner with Sip now). 30 tests.
 - 2026-10-19 claude: PWA icon (notebook + leaf, user-picked v2c), PNG set via `make icons`. LICENSE retconned into all commits (force-pushed, user-approved).
 - 2026-10-19 claude: AGPL-3.0 (LICENSE, SPDX, source link in Settings), UI back to medium size. Retcon blocked by auto-mode classifier.
 - 2026-10-18 claude: JSON export still dead on Android Chrome → 3 backup paths with feedback (save/share/copy) + paste restore, visible app version, SW revalidates (fixes stale app.js). Can't test on a real phone here.

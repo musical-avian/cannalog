@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Data shape, validation, local storage, JSON/CSV backup. No DOM. Shape is documented in docs/data.md.
 
-import { activeMg, dayKey, isDose, productMg } from "./calc.js";
+import { activeMg, dayKey, expandLoads, isDose, isSip, productMg } from "./calc.js";
 
 export const STORAGE_KEY = "cannalog.v1";
 // step = smallest amount you can realistically measure (calculator rounds to it): 1 mg on a scale, 0.05 ml (~1 drop), ¼ edible.
@@ -11,6 +11,8 @@ export const FORMS = {
   edible: { amountUnit: "units", strengthUnit: "mg/unit", defaultRoute: "oral", step: 0.25 },
 };
 export const ROUTES = ["inhaled", "oral"];
+// How much of a vaporizer load was used when it was emptied: all, ¾, ½, ¼.
+export const LOAD_USED_FRACTIONS = [1, 0.75, 0.5, 0.25];
 export const THEMES = ["auto", "light", "dark"]; // auto = follow the phone setting
 
 export function defaultSettings() {
@@ -112,8 +114,8 @@ export function validateEntry(entry) {
   check(isText(entry?.id), "entry needs an id");
   const label = `entry ${entry.id}`;
   check(isText(entry.t) && !Number.isNaN(Date.parse(entry.t)), `${label}: time "${entry.t}" is not a date`);
-  // noDose entries (craving, event) have no product, amount or route.
-  if (isDose(entry)) {
+  // noDose entries (craving, event) and sips (one use of a vaporizer load) have no product, amount or route.
+  if (isDose(entry) && !isSip(entry)) {
     validateStrain(entry.strain, `${label} strain`);
     check(isNumber(entry.amount) && entry.amount > 0, `${label}: amount ${entry.amount} must be > 0`);
     check(ROUTES.includes(entry.route), `${label}: route "${entry.route}" must be one of ${ROUTES.join(", ")}`);
@@ -125,6 +127,11 @@ export function validateEntry(entry) {
   check(Array.isArray(entry.effects), `${label}: effects must be a list`);
   for (const effect of entry.effects) {
     check(isText(effect.tag) && typeof effect.good === "boolean", `${label}: bad effect ${JSON.stringify(effect)}`);
+  }
+  if (entry.load !== undefined) {
+    const used = entry.load?.used;
+    check(typeof entry.load?.open === "boolean", `${label}: load.open must be true or false`);
+    check(LOAD_USED_FRACTIONS.includes(used), `${label}: load.used ${used} must be one of ${LOAD_USED_FRACTIONS.join(", ")}`);
   }
   // watch: optional list of tag names (added after v1 shipped).
   const watch = entry.watch ?? [];
@@ -139,6 +146,10 @@ export function validate(state) {
   check(Array.isArray(state.entries), "entries must be a list");
   for (const strain of state.strains) validateStrain(strain);
   for (const entry of state.entries) validateEntry(entry);
+  const loadIds = new Set(state.entries.filter((e) => e.load).map((e) => e.id));
+  for (const entry of state.entries) {
+    if (isSip(entry)) check(loadIds.has(entry.sipOf), `entry ${entry.id}: sip of load ${entry.sipOf}, but that load does not exist`);
+  }
   const settings = state.settings;
   check(settings?.calcMode in { raw: 1, decarb: 1, absorbed: 1 }, `calcMode "${settings?.calcMode}" unknown`);
   // theme was added after v1 shipped: missing means "auto", so older backups stay valid.
@@ -224,9 +235,10 @@ export function toCsv(state) {
     "good_effects",
     "bad_effects",
     "watch",
+    "load_id",
     "note",
   ];
-  const rows = [...state.entries]
+  const rows = expandLoads(state.entries)
     .sort((a, b) => a.t.localeCompare(b.t))
     .map((entry) => {
       const product = productMg(entry);
@@ -251,6 +263,7 @@ export function toCsv(state) {
         tags(true),
         tags(false),
         (entry.watch ?? []).join("; "),
+        entry.sipOf ?? (entry.load ? entry.id : ""),
         entry.note,
       ];
     });

@@ -39,6 +39,11 @@ Entry = {
   watch: ["craving"],              // optional, watch tag names
 }
 
+// Vaporizer load: a normal dose entry with
+//   load: { open: true|false, used: 1 | 0.75 | 0.5 | 0.25 }   // used = 1 while open
+// Sip = one use of a load: no strain/amount/route; sipOf must be an existing load's id.
+Sip = { id, t, sipOf: "load id", note, scores, effects, watch }
+
 // Entry without dose (craving, event): no strain/amount/route; needs a watch tag or a note.
 NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 ```

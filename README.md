@@ -10,6 +10,7 @@ Private medical cannabis log. Runs in the browser, installable, offline. Data st
 - mg as: in product / decarboxylated / absorbed estimate.
 - Usage creep: smoothed trend, weekly rate, mean/median, use-free days, optional personal ceiling.
 - Watch tags (craving, urge resisted, used to cope, …), loggable without a dose, shown on the timeline.
+- Vaporizer load: fill once, tap "Sip now" through the day; mg split over the uses; on empty: all/¾/½/¼ used.
 - Dose calculator: want x mg THC (+ y mg CBD) → how much of 1–2 products.
 - Backup: JSON export/import, CSV export.
 

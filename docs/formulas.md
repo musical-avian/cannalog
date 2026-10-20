@@ -54,3 +54,10 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 - Logged with a dose or without (`noDose` entry). No-dose entries add 0 mg, are not "uses", and don't break use-free days.
 - Counts per day/week; more = red, except "urge resisted" (more = green).
 - Trends: orange dot at the top of the mg chart on days with watch tags; notes panel lists them.
+
+## 9. Vaporizer load (fill once, use through the day)
+- Load = dose entry with `load`. Each "Sip now" = one more use of it. The fill counts as the first use.
+- `share = amount × used / (1 + sips)`; every use gets that share at its own time (`expandLoads`). So a sip after midnight counts on the next day.
+- While open, `used` = 1 and the share shrinks with each sip; the day total stays the full load.
+- "Empty…" sets `used` = all / ¾ / ½ / ¼ → all shares scale down.
+- All math (day, week, trends, creep, CSV) runs on the expanded list; the saved data keeps the raw load + sips.
