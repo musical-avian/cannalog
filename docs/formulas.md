@@ -76,6 +76,9 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 
 ## 11. Doctor report (`report.js`)
 - German, one A4 page, black/white (print → "Save as PDF").
+- **Summary block at the top**: 6-month sparkline of weekly Ø THC/day + key numbers (Ø, median, use-free days, 4-week trend ▲▼=, CBD); per symptom a bar of |r| (ticks at 0.1/0.3/0.5; black = more THC goes with better, hatched = worse, grey = none) + words; strongest factor (biggest THC difference with/without a tag) and strongest amount r.
+- Amounts table: r of logged amounts (sleep h, medication mg) with THC and the strongest symptom; amounts that never change are left out (stay "ohne Vergleich").
+- Factor and amount tables side by side; row limits (4 factors, 3 amounts, 8 tag strips) keep it on one page; checked with a worst-case dataset (all 8 context + 5 watch tags, 4 symptoms) via Playwright page.pdf.
 - 4 weeks daily: grey THC bars + black symptom lines (dash + marker per symptom, 0–10) + one strip per tag (■ = logged that day), all on the same columns.
 - 6 months weekly: mean THC/day bars + weekly symptom means.
 - Tables: THC ↔ symptoms (use-free vs use days, r 4 W / 6 M, next day, verdict) and factors.
