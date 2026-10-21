@@ -62,6 +62,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-21 claude: use-free mean only from ≥ 3 days; r of logged amounts (sleep h, medication mg) with THC + symptoms, also for daily tags. 37 tests.
 - 2026-10-21 claude: correlations never silently hidden: "no variation" label instead of "too few"; every-day/rare tags named in report + app. 36 tests.
 - 2026-10-21 claude: context tags, correlations (Trends card), German A4 doctor report (print → PDF, 1 page verified). 35 tests.
 - 2026-10-20 claude: dropped ¾/½/¼ guess on Empty (flower: unknowable); full load counts, old fractions kept.

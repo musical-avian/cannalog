@@ -17,10 +17,12 @@ import {
   groupByDay,
   isDose,
   isSip,
+  MIN_PAIRED_DAYS,
   mean,
   median,
   mgPerUnit,
   planForMg,
+  R_WEAK,
   RATE_WINDOW_DAYS,
   rangeText,
   ratioText,
@@ -36,6 +38,7 @@ import {
   usageChange,
   useCorrelations,
   useFreeDays,
+  valueCorrelations,
   weeklyRate,
   weekStart,
 } from "./calc.js";
@@ -65,7 +68,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-21.2";
+const APP_VERSION = "2026-10-21.3";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -576,6 +579,23 @@ function symptomChangeWords(symptom, direction) {
   return `${goesUp ? "more" : "less"} ${esc(symptom.name)}`;
 }
 
+/** "sleep amount (37 days): more → less THC (moderate) · anxiety less (strong)" */
+function amountLine(row) {
+  const thcWords = STRENGTH_WORDS[strengthLabel(row.thc)];
+  let thcText = thcWords;
+  if (row.thc.r != null && Math.abs(row.thc.r) >= R_WEAK) {
+    const moreOrLess = row.thc.r > 0 ? "more" : "less";
+    thcText = `more → ${moreOrLess} THC (${thcWords})`;
+  }
+  let symptomText = "";
+  if (row.symptom) {
+    const direction = relationDirection(row.symptomResult.r, row.symptom.higherIsBetter);
+    const words = STRENGTH_WORDS[strengthLabel(row.symptomResult)];
+    symptomText = direction ? ` · ${symptomChangeWords(row.symptom, direction)} (${words})` : "";
+  }
+  return `<div class="row spread"><span class="chip">${esc(row.tag)} amount</span><span>${row.n} days: ${thcText}${symptomText}</span></div>`;
+}
+
 /** Correlations over the last 6 months: does THC go with better or worse symptoms? Which factors go with less use? */
 function correlationsCard() {
   const today = dayKey(new Date());
@@ -596,8 +616,19 @@ function correlationsCard() {
     (f) =>
       `<div class="row spread"><span class="chip">${esc(f.tag)}</span><span>${f.daysWith} days · THC ${round1(f.thcWith)} with / ${round1(f.thcWithout)} without (mg/day)</span></div>`,
   );
+  // Logged amounts (sleep h, medication mg): r with THC and the strongest symptom. Works for daily tags too.
+  const valued = contextTagsOf(state.settings).filter((t) => t.unit);
+  const amounts = valueCorrelations(
+    days,
+    valued.map((t) => t.tag),
+    symptoms,
+  ).filter((a) => a.n >= MIN_PAIRED_DAYS && a.thc.reason !== "no variation x"); // same amount every day: nothing to learn
+  for (const a of amounts) factors.push(amountLine(a));
   // Tags logged (almost) every day or only 1–2 times can't be compared; say so instead of hiding them.
-  const skipped = comparisons.skipped.map((s) => `${esc(s.tag)} (${s.reason === "every day" ? "every day" : `only ${s.daysWith}×`})`);
+  const covered = new Set(amounts.map((a) => a.tag));
+  const skipped = comparisons.skipped
+    .filter((s) => !covered.has(s.tag))
+    .map((s) => `${esc(s.tag)} (${s.reason === "every day" ? "every day" : `only ${s.daysWith}×`})`);
   if (skipped.length) factors.push(`<p class="muted">Not comparable (need ≥ 3 days with and without): ${skipped.join(", ")}</p>`);
   return `<h2>Correlations <span class="muted">(6 months, same day)</span></h2>
     <div class="card" style="overflow-x:auto">

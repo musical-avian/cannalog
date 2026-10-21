@@ -170,9 +170,10 @@ export function summarize(entries, mode) {
     if (isDose(entry)) summary.count += 1;
     for (const tag of entry.watch ?? []) summary.watch[tag] = (summary.watch[tag] ?? 0) + 1;
     for (const item of entry.context ?? []) {
-      const seen = summary.context[item.tag] ?? { count: 0, total: 0 };
+      const seen = summary.context[item.tag] ?? { count: 0, total: 0, valued: false };
       seen.count += 1;
       seen.total += item.value ?? 0;
+      if (item.value != null) seen.valued = true; // at least one number logged (sleep 6 h), not just "yes"
       summary.context[item.tag] = seen;
     }
     const active = activeMg(entry, mode);
@@ -473,7 +474,7 @@ export const R_MODERATE = 0.3;
 export const R_STRONG = 0.5;
 
 /**
- * One row per day: { key, thc, cbd, scores: { name: mean or missing }, tags: { tag: count } }.
+ * One row per day: { key, thc, cbd, scores: { name: mean or missing }, tags: { tag: count }, values: { tag: sum } }.
  * THC is 0 on use-free days (real data); a symptom is missing on days it was not rated.
  * tags holds both watch tags and context tags (medication, exercise, ...).
  */
@@ -481,8 +482,13 @@ export function dailySeries(keys, byDay, mode) {
   return keys.map((key) => {
     const summary = summarize(byDay[key] ?? [], mode);
     const tags = { ...summary.watch };
-    for (const [tag, seen] of Object.entries(summary.context)) tags[tag] = seen.count;
-    return { key, thc: summary.thc[1], cbd: summary.cbd[1], scores: summary.scores, tags };
+    // values: summed number per context tag (sleep 6 h, medication 20 mg), only where a number was logged.
+    const values = {};
+    for (const [tag, seen] of Object.entries(summary.context)) {
+      tags[tag] = seen.count;
+      if (seen.valued) values[tag] = seen.total;
+    }
+    return { key, thc: summary.thc[1], cbd: summary.cbd[1], scores: summary.scores, tags, values };
   });
 }
 
@@ -539,11 +545,6 @@ export function relationDirection(r, higherIsBetter) {
   return "worse";
 }
 
-function meanOrNull(values) {
-  if (values.length === 0) return null;
-  return mean(values);
-}
-
 /**
  * Per symptom: r on the same day, r with the next day's score, and mean score on use-free days vs use days.
  */
@@ -557,9 +558,10 @@ export function useCorrelations(days, symptoms) {
       symptom,
       sameDay: pearson(thc, score),
       nextDay: pearson(thc.slice(0, -1), score.slice(1)), // THC today vs score tomorrow
-      freeMean: meanOrNull(freeScores),
+      // With 1–2 use-free days the mean is just those days; show "–" and let r carry the message.
+      freeMean: freeScores.length >= MIN_GROUP_DAYS ? mean(freeScores) : null,
       freeN: freeScores.length,
-      useMean: meanOrNull(useScores),
+      useMean: useScores.length >= MIN_GROUP_DAYS ? mean(useScores) : null,
       useN: useScores.length,
     };
   });
@@ -630,4 +632,41 @@ export function weeklySeries(days) {
     }
     return { key: week.key, thcPerDay: mean(week.days.map((d) => d.thc)), scores };
   });
+}
+
+/**
+ * For context tags logged with a number (sleep hours, medication mg, exercise minutes):
+ * does more of it go with more or less THC, and with which symptom most?
+ * Works for tags logged every day, where a with/without comparison is impossible.
+ * Only days with a logged number count (a missing day is unknown, not 0).
+ * Rows: { tag, n, thc: pearson result, symptom, symptomResult } — symptom = strongest |r|, or null.
+ */
+export function valueCorrelations(days, tags, symptoms) {
+  const rows = [];
+  for (const tag of tags) {
+    const amounts = days.map((d) => d.values?.[tag] ?? null);
+    const n = amounts.filter((v) => v != null).length;
+    if (n === 0) continue;
+    const row = {
+      tag,
+      n,
+      thc: pearson(
+        amounts,
+        days.map((d) => d.thc),
+      ),
+      symptom: null,
+      symptomResult: null,
+    };
+    for (const symptom of symptoms) {
+      const result = pearson(
+        amounts,
+        days.map((d) => d.scores[symptom.name] ?? null),
+      );
+      if (result.r == null) continue;
+      const strongestSoFar = row.symptomResult ? Math.abs(row.symptomResult.r) : -1;
+      if (Math.abs(result.r) > strongestSoFar) Object.assign(row, { symptom, symptomResult: result });
+    }
+    rows.push(row);
+  }
+  return rows;
 }

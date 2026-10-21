@@ -30,6 +30,7 @@ import {
   usageChange,
   useCorrelations,
   useFreeDays,
+  valueCorrelations,
   weeklyRate,
   weeklySeries,
   weekStart,
@@ -331,4 +332,32 @@ test("minimums never hide sensible results: daily user still gets r; every-day a
     { tag: "medication", daysWith: 30, reason: "every day" },
     { tag: "alcohol", daysWith: 2, reason: "rare" },
   ]);
+});
+
+test("use-free mean hidden below 3 days; logged amounts (sleep h) correlate with THC and symptoms even when logged daily", () => {
+  const anxiety = { name: "anxiety", higherIsBetter: false };
+  // 20 days, used every day except 2 long-sleep days; sleep logged every day: more sleep → less THC, less anxiety.
+  const days = Array.from({ length: 20 }, (_, i) => {
+    const sleep = 5 + (i % 4);
+    return {
+      key: `2026-08-${String(i + 1).padStart(2, "0")}`,
+      thc: i === 3 || i === 7 ? 0 : 40 - sleep * 4,
+      scores: { anxiety: 12 - sleep },
+      tags: { sleep: 1 },
+      values: { sleep },
+    };
+  });
+  const [row] = useCorrelations(days, [anxiety]);
+  assert.equal(row.freeN, 2);
+  assert.equal(row.freeMean, null); // 2 use-free days: no mean shown
+  assert.ok(row.useMean != null);
+
+  assert.equal(tagComparisons(days, ["sleep"], [anxiety]).skipped[0].reason, "every day"); // with/without impossible...
+  const [sleep] = valueCorrelations(days, ["sleep", "never"], [anxiety]); // ...but the amount works
+  assert.equal(sleep.tag, "sleep");
+  assert.equal(sleep.n, 20);
+  assert.ok(sleep.thc.r < -0.5); // more sleep, less THC
+  assert.equal(sleep.symptom.name, "anxiety");
+  assert.ok(sleep.symptomResult.r < -0.99); // more sleep, less anxiety
+  assert.equal(valueCorrelations(days, ["never"], [anxiety]).length, 0);
 });

@@ -66,11 +66,12 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 - Per day: THC mg (0 on use-free days), symptom = daily mean (missing if unrated), tags = logged that day yes/no (`dailySeries`).
 - **r** = Pearson correlation of daily THC with the same day's score; **next day** = THC today vs score tomorrow. Shown only with ≥ 10 paired days.
 - Words: |r| < 0.1 none, < 0.3 weak, < 0.5 moderate, else strong (Cohen 1988). Direction uses `higherIsBetter` ("more THC, less pain").
-- **Use-free vs use days**: mean score on days with 0 mg vs days with use.
+- **Use-free vs use days**: mean score on days with 0 mg vs days with use; shown only with ≥ 3 days in the group (else "–" with n). With near-daily use, r is the meaningful number.
 - **Factors** (context + watch tags): days with vs without the tag → mean THC, and the symptom with the biggest difference. Only with ≥ 3 days on both sides.
 - What the minimums apply to: **r** needs ≥ 10 days with both THC and the score (use-free days count as 0 mg, so daily users still get r). The **3-day rule** only gates the factor table. Nothing else is hidden:
   - no r because THC (or the score) was the same every day → "THC always the same" / „THC immer gleich“, not "too few days";
   - tags logged (almost) every day or only 1–2 times → listed as "not comparable (every day / only n×)".
+- **Amounts** (context tags with a unit: sleep h, medication mg, exercise min): r of the logged amount with daily THC, and the symptom with the strongest r (≥ 10 days with a number; days without a number are unknown, not 0). Works for tags logged every day, where with/without can't be compared; such tags then no longer appear as "not comparable".
 - Correlation ≠ cause; many comparisons → read single values as hints.
 
 ## 11. Doctor report (`report.js`)
