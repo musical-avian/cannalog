@@ -61,3 +61,18 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 - The full load always counts (`used` = 1); the share shrinks with each sip, the day total stays the full load.
 - "Empty" just closes the load. No "how much was used" guess: for flower in a dry-herb vape that is unknowable, and a consistent upper bound keeps trends honest. Loads logged by an earlier version with ¾/½/¼ keep that value.
 - All math (day, week, trends, creep, CSV) runs on the expanded list; the saved data keeps the raw load + sips.
+
+## 10. Correlations (Trends card, report)
+- Per day: THC mg (0 on use-free days), symptom = daily mean (missing if unrated), tags = logged that day yes/no (`dailySeries`).
+- **r** = Pearson correlation of daily THC with the same day's score; **next day** = THC today vs score tomorrow. Shown only with ≥ 10 paired days.
+- Words: |r| < 0.1 none, < 0.3 weak, < 0.5 moderate, else strong (Cohen 1988). Direction uses `higherIsBetter` ("more THC, less pain").
+- **Use-free vs use days**: mean score on days with 0 mg vs days with use.
+- **Factors** (context + watch tags): days with vs without the tag → mean THC, and the symptom with the biggest difference. Only with ≥ 3 days on both sides.
+- Correlation ≠ cause; many comparisons → read single values as hints.
+
+## 11. Doctor report (`report.js`)
+- German, one A4 page, black/white (print → "Save as PDF").
+- 4 weeks daily: grey THC bars + black symptom lines (dash + marker per symptom, 0–10) + one strip per tag (■ = logged that day), all on the same columns.
+- 6 months weekly: mean THC/day bars + weekly symptom means.
+- Tables: THC ↔ symptoms (use-free vs use days, r 4 W / 6 M, next day, verdict) and factors.
+- Symptoms never rated in 6 months are left out.

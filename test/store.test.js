@@ -107,7 +107,7 @@ test("no-dose entry: valid without product, needs a watch tag or note; old data 
   assert.doesNotThrow(() => validate(s));
   assert.match(toCsv(s), /\(no dose\).*craving/);
   craving.watch = [];
-  assert.throws(() => validate(s), /entry c1: entry without dose needs a watch tag or a note/);
+  assert.throws(() => validate(s), /entry c1: entry without dose needs a tag, a score or a note/);
 });
 
 test("anxiety: added once to older settings, stays deleted if removed", () => {
@@ -155,4 +155,27 @@ test("closed vaporizer load counting fully is valid; old guessed fractions stay 
   assert.doesNotThrow(() => validate(s));
   s.entries[0].load.used = 0.5; // written by an earlier version
   assert.doesNotThrow(() => validate(s));
+});
+
+test("context tags: optional, validated, in CSV; no-dose entry with only context is valid", () => {
+  const s = sample();
+  delete s.settings.contextTags;
+  assert.doesNotThrow(() => validate(s)); // older data
+  s.settings.contextTags = [{ tag: "exercise", kind: "beneficial", unit: "min" }];
+  s.entries.push({
+    id: "c1",
+    t: "2026-10-18T12:00:00.000Z",
+    noDose: true,
+    note: "",
+    scores: {},
+    effects: [],
+    context: [{ tag: "exercise", value: 30 }],
+  });
+  assert.doesNotThrow(() => validate(s));
+  assert.match(toCsv(s), /exercise 30/);
+  s.entries[1].context[0].value = -1;
+  assert.throws(() => validate(s), /entry c1: bad context/);
+  s.entries[1].context[0].value = null;
+  s.settings.contextTags[0].kind = "great";
+  assert.throws(() => validate(s), /kind "great" must be one of/);
 });

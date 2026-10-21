@@ -15,6 +15,7 @@ Stored in `localStorage["cannalog.v1"]` as JSON. Same shape in the JSON backup. 
     symptomsVersion: 2,                  // optional; < 2 → anxiety added once on load
     effectTags: [{ tag: "relaxed", good: true }],
     watchTags: [{ tag: "craving" }],      // optional, missing = defaults
+    contextTags: [{ tag: "exercise", kind: "beneficial" | "neutral", unit: "" | "mg" | "h" | "min" | "x" }], // optional, missing = defaults
   },
 }
 
@@ -37,6 +38,7 @@ Entry = {
   scores: { mood: 6, pain: 3 },    // 0–10, only rated symptoms
   effects: [{ tag: "dry mouth", good: false }],
   watch: ["craving"],              // optional, watch tag names
+  context: [{ tag: "exercise", value: 30 }], // optional; value may be null
 }
 
 // Vaporizer load: a normal dose entry with
@@ -44,7 +46,7 @@ Entry = {
 // Sip = one use of a load: no strain/amount/route; sipOf must be an existing load's id.
 Sip = { id, t, sipOf: "load id", note, scores, effects, watch }
 
-// Entry without dose (craving, event): no strain/amount/route; needs a watch tag or a note.
+// Entry without dose (craving, event, habit): no strain/amount/route; needs a tag, a score or a note.
 NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 ```
 

@@ -9,6 +9,10 @@ export const SOURCES = {
   ohlsson1986: { title: "Ohlsson 1986, CBD after smoking and IV", url: "https://doi.org/10.1002/bms.1200130206" },
   millar2018: { title: "Millar 2018, systematic review of CBD PK", url: "https://doi.org/10.3389/fphar.2018.01365" },
   hackersDiet: { title: "Walker, The Hacker's Diet: exponentially smoothed trend", url: "https://www.fourmilab.ch/hackdiet/" },
+  cohen1988: {
+    title: "Cohen 1988, Statistical Power Analysis (r: 0.1 small, 0.3 medium, 0.5 large)",
+    url: "https://doi.org/10.4324/9780203771587",
+  },
 };
 
 // THCA → THC loses CO2. Mass factor = 314.5 / 358.5. CBDA → CBD has the same masses.
@@ -157,13 +161,20 @@ export function dayRange(firstKey, lastKey) {
  */
 export function summarize(entries, mode) {
   // count = number of doses (events without a dose are not "uses"). watch = { tag: count }.
-  const summary = { count: 0, thc: [0, 0], cbd: [0, 0], scores: {}, effects: {}, watch: {} };
+  // context = { tag: { count, total } }: medication, exercise, sleep... total sums the optional values.
+  const summary = { count: 0, thc: [0, 0], cbd: [0, 0], scores: {}, effects: {}, watch: {}, context: {} };
   const scoreSums = {};
   const scoreCounts = {};
 
   for (const entry of entries) {
     if (isDose(entry)) summary.count += 1;
     for (const tag of entry.watch ?? []) summary.watch[tag] = (summary.watch[tag] ?? 0) + 1;
+    for (const item of entry.context ?? []) {
+      const seen = summary.context[item.tag] ?? { count: 0, total: 0 };
+      seen.count += 1;
+      seen.total += item.value ?? 0;
+      summary.context[item.tag] = seen;
+    }
     const active = activeMg(entry, mode);
     summary.thc[0] += active.thc[0];
     summary.thc[1] += active.thc[1];
@@ -448,4 +459,158 @@ export function expandLoads(entries) {
     }
   }
   return result;
+}
+
+// ---------- correlations: does use go together with symptoms or other factors? ----------
+
+// Fewer paired days than this → no r shown ("too few days"). Chosen, not a statistical rule (docs/limits.md).
+export const MIN_PAIRED_DAYS = 10;
+// A tag comparison needs at least this many days with and without the tag (docs/limits.md).
+export const MIN_GROUP_DAYS = 3;
+// Cohen 1988 conventions for |r|: 0.1 small, 0.3 medium, 0.5 large.
+export const R_WEAK = 0.1;
+export const R_MODERATE = 0.3;
+export const R_STRONG = 0.5;
+
+/**
+ * One row per day: { key, thc, cbd, scores: { name: mean or missing }, tags: { tag: count } }.
+ * THC is 0 on use-free days (real data); a symptom is missing on days it was not rated.
+ * tags holds both watch tags and context tags (medication, exercise, ...).
+ */
+export function dailySeries(keys, byDay, mode) {
+  return keys.map((key) => {
+    const summary = summarize(byDay[key] ?? [], mode);
+    const tags = { ...summary.watch };
+    for (const [tag, seen] of Object.entries(summary.context)) tags[tag] = seen.count;
+    return { key, thc: summary.thc[1], cbd: summary.cbd[1], scores: summary.scores, tags };
+  });
+}
+
+/**
+ * Pearson correlation of two equally long lists; pairs where either value is null/undefined are skipped.
+ * { r, n }: r is null when fewer than MIN_PAIRED_DAYS pairs, or when one side never changes.
+ */
+export function pearson(xs, ys) {
+  const pairs = [];
+  for (let i = 0; i < xs.length; i++) {
+    if (xs[i] == null || ys[i] == null) continue;
+    pairs.push([xs[i], ys[i]]);
+  }
+  const n = pairs.length;
+  if (n < MIN_PAIRED_DAYS) return { r: null, n };
+  const meanX = mean(pairs.map((p) => p[0]));
+  const meanY = mean(pairs.map((p) => p[1]));
+  let sumXY = 0;
+  let sumXX = 0;
+  let sumYY = 0;
+  for (const [x, y] of pairs) {
+    sumXY += (x - meanX) * (y - meanY);
+    sumXX += (x - meanX) ** 2;
+    sumYY += (y - meanY) ** 2;
+  }
+  if (sumXX === 0 || sumYY === 0) return { r: null, n }; // no variation: correlation undefined
+  return { r: sumXY / Math.sqrt(sumXX * sumYY), n };
+}
+
+/** "none" | "weak" | "moderate" | "strong", or "too few" when r is null. */
+export function strengthLabel(r) {
+  if (r == null) return "too few";
+  const size = Math.abs(r);
+  if (size < R_WEAK) return "none";
+  if (size < R_MODERATE) return "weak";
+  if (size < R_STRONG) return "moderate";
+  return "strong";
+}
+
+/**
+ * Does more THC go with a better or worse symptom? "better" | "worse" | null (no clear relation).
+ * Uses the symptom's direction: for pain, a negative r (more THC, less pain) is "better".
+ */
+export function relationDirection(r, higherIsBetter) {
+  if (r == null || Math.abs(r) < R_WEAK) return null;
+  const goesUp = r > 0;
+  if (goesUp === higherIsBetter) return "better";
+  return "worse";
+}
+
+function meanOrNull(values) {
+  if (values.length === 0) return null;
+  return mean(values);
+}
+
+/**
+ * Per symptom: r on the same day, r with the next day's score, and mean score on use-free days vs use days.
+ */
+export function useCorrelations(days, symptoms) {
+  const thc = days.map((d) => d.thc);
+  return symptoms.map((symptom) => {
+    const score = days.map((d) => d.scores[symptom.name] ?? null);
+    const freeScores = days.filter((d, i) => d.thc === 0 && score[i] != null).map((d) => d.scores[symptom.name]);
+    const useScores = days.filter((d, i) => d.thc > 0 && score[i] != null).map((d) => d.scores[symptom.name]);
+    return {
+      symptom,
+      sameDay: pearson(thc, score),
+      nextDay: pearson(thc.slice(0, -1), score.slice(1)), // THC today vs score tomorrow
+      freeMean: meanOrNull(freeScores),
+      freeN: freeScores.length,
+      useMean: meanOrNull(useScores),
+      useN: useScores.length,
+    };
+  });
+}
+
+/**
+ * Per tag: days with/without it, mean THC with/without, and the symptom that differs most.
+ * Tags with fewer than MIN_GROUP_DAYS days on either side are left out.
+ */
+export function tagComparisons(days, tags, symptoms) {
+  const rows = [];
+  for (const tag of tags) {
+    const withTag = days.filter((d) => (d.tags[tag] ?? 0) > 0);
+    const without = days.filter((d) => !((d.tags[tag] ?? 0) > 0));
+    if (withTag.length < MIN_GROUP_DAYS || without.length < MIN_GROUP_DAYS) continue;
+    const row = {
+      tag,
+      daysWith: withTag.length,
+      thcWith: mean(withTag.map((d) => d.thc)),
+      thcWithout: mean(without.map((d) => d.thc)),
+      symptom: null,
+      scoreWith: null,
+      scoreWithout: null,
+    };
+    for (const symptom of symptoms) {
+      const rated = (list) => list.map((d) => d.scores[symptom.name]).filter((v) => v != null);
+      const ratedWith = rated(withTag);
+      const ratedWithout = rated(without);
+      if (ratedWith.length < MIN_GROUP_DAYS || ratedWithout.length < MIN_GROUP_DAYS) continue;
+      const scoreWith = mean(ratedWith);
+      const scoreWithout = mean(ratedWithout);
+      const biggestSoFar = row.symptom ? Math.abs(row.scoreWith - row.scoreWithout) : -1;
+      if (Math.abs(scoreWith - scoreWithout) > biggestSoFar) Object.assign(row, { symptom, scoreWith, scoreWithout });
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Days grouped into weeks (Monday start) for the long-term view: { weekKey, thcPerDay, scores: { name: mean } }. */
+export function weeklySeries(days) {
+  const weeks = [];
+  for (const day of days) {
+    const key = weekStart(day.key);
+    let week = weeks.at(-1);
+    if (!week || week.key !== key) {
+      week = { key, days: [] };
+      weeks.push(week);
+    }
+    week.days.push(day);
+  }
+  return weeks.map((week) => {
+    const scores = {};
+    const names = new Set(week.days.flatMap((d) => Object.keys(d.scores)));
+    for (const name of names) {
+      scores[name] = mean(week.days.map((d) => d.scores[name]).filter((v) => v != null));
+    }
+    return { key: week.key, thcPerDay: mean(week.days.map((d) => d.thc)), scores };
+  });
 }

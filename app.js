@@ -6,6 +6,7 @@ import {
   activeMg,
   addDays,
   CALC_MODES,
+  dailySeries,
   dailyThcSeries,
   dayKey,
   dayRange,
@@ -23,18 +24,26 @@ import {
   RATE_WINDOW_DAYS,
   rangeText,
   ratioText,
+  relationDirection,
   rollingAverage,
   round1,
   smoothTrend,
+  strengthLabel,
   summarize,
+  tagComparisons,
   thcShare,
   trend,
   usageChange,
+  useCorrelations,
   useFreeDays,
   weeklyRate,
   weekStart,
 } from "./calc.js";
+import { buildReport, LONG_WEEKS } from "./report.js";
 import {
+  CONTEXT_KINDS,
+  CONTEXT_UNITS,
+  contextTagsOf,
   emptyState,
   FORMS,
   fromJson,
@@ -56,7 +65,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-20.2";
+const APP_VERSION = "2026-10-21.1";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -142,6 +151,19 @@ function trendSpan(now, before, higherIsBetter, threshold) {
 /** Usage: less is the goal, so up = red. */
 function usageSpan(now, before) {
   return directionSpan(usageChange(now, before), now > before);
+}
+
+/** "exercise 30 min" chips for context tags (medication, habits). */
+function contextChips(context) {
+  const units = {};
+  for (const t of contextTagsOf(state.settings)) units[t.tag] = t.unit;
+  return (context ?? [])
+    .map((item) => {
+      const unit = units[item.tag] ?? "";
+      const value = item.value == null ? "" : ` ${item.value}${unit === "x" ? "×" : ` ${unit}`}`;
+      return `<span class="chip context">${esc(item.tag)}${esc(value)}</span>`;
+    })
+    .join(" ");
 }
 
 function watchChips(tags) {
@@ -365,6 +387,7 @@ function renderDay() {
       ${scores ? `<div class="muted">${scores}</div>` : ""}
       ${entry.effects.length ? `<div class="row">${effectChips(entry.effects)}</div>` : ""}
       ${entry.watch?.length ? `<div class="row">${watchChips(entry.watch)}</div>` : ""}
+      ${entry.context?.length ? `<div class="row">${contextChips(entry.context)}</div>` : ""}
       ${entry.note ? `<div>📝 ${esc(entry.note)}</div>` : ""}`;
     if (!isDose(entry)) {
       return `<div class="card entry no-dose" data-id="${entry.id}"><b>${time} no dose</b>${details}</div>`;
@@ -536,6 +559,59 @@ function watchLast7VsPrev7(today) {
   return `<p class="muted">Watch, last 7 days</p>${rows}`;
 }
 
+const STRENGTH_WORDS = { none: "no link", weak: "weak", moderate: "moderate", strong: "strong", "too few": "too few days" };
+
+/** "less pain", "higher mood": how the symptom moves when it gets better or worse. */
+function symptomChangeWords(symptom, direction) {
+  const goesUp = (direction === "better") === symptom.higherIsBetter;
+  if (symptom.higherIsBetter) return `${goesUp ? "higher" : "lower"} ${esc(symptom.name)}`;
+  return `${goesUp ? "more" : "less"} ${esc(symptom.name)}`;
+}
+
+/** Correlations over the last 6 months: does THC go with better or worse symptoms? Which factors go with less use? */
+function correlationsCard() {
+  const today = dayKey(new Date());
+  const keys = dayRange(addDays(today, -(LONG_WEEKS * 7 - 1)), today);
+  const days = dailySeries(keys, groupByDay(mathEntries()), chartMode());
+  const symptoms = state.settings.symptoms;
+  const rows = useCorrelations(days, symptoms).map((row) => {
+    const direction = relationDirection(row.sameDay.r, row.symptom.higherIsBetter);
+    const words = STRENGTH_WORDS[strengthLabel(row.sameDay.r)];
+    const verdict = direction ? `${words}: more THC, ${symptomChangeWords(row.symptom, direction)}` : words;
+    const css = direction ?? "same";
+    const r = row.sameDay.r == null ? "–" : row.sameDay.r.toFixed(2);
+    return `<tr><td>${esc(row.symptom.name)}</td><td>${row.freeMean == null ? "–" : round1(row.freeMean)}</td><td>${row.useMean == null ? "–" : round1(row.useMean)}</td><td>${r}</td><td class="${css}">${verdict}</td></tr>`;
+  });
+  const tags = [...contextTagsOf(state.settings), ...watchTagsOf(state.settings)].map((t) => t.tag);
+  const factors = tagComparisons(days, tags, symptoms).map(
+    (f) =>
+      `<div class="row spread"><span class="chip">${esc(f.tag)}</span><span>${f.daysWith} days · THC ${round1(f.thcWith)} with / ${round1(f.thcWithout)} without (mg/day)</span></div>`,
+  );
+  return `<h2>Correlations <span class="muted">(6 months, same day)</span></h2>
+    <div class="card" style="overflow-x:auto">
+      <table><thead><tr><th></th><th>use-free</th><th>use days</th><th>r</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>
+      <p class="muted">Mean score on use-free days vs use days; r = correlation of daily THC with the score (≥ 10 days). Goes together ≠ causes.</p>
+      ${factors.join("") || `<p class="muted">Factors: need ≥ 3 days with and without a tag.</p>`}
+      <button type="button" class="primary" data-report="pdf">Doctor report (PDF)</button>
+    </div>`;
+}
+
+/** Fill #report with the German A4 report and open the print dialog ("Save as PDF"). */
+function printDoctorReport() {
+  $("#report").innerHTML = buildReport({
+    entries: mathEntries(),
+    settings: state.settings,
+    mode: chartMode(),
+    todayKey: dayKey(new Date()),
+    appVersion: APP_VERSION,
+    sourceUrl: SOURCE_URL,
+    contextTags: contextTagsOf(state.settings),
+    watchTags: watchTagsOf(state.settings),
+  });
+  toast('In the print dialog pick "Save as PDF" or a printer.');
+  window.print();
+}
+
 /** Daily THC from the first entry (or range start) to today, so the smoothed trend is warmed up before the range starts. */
 function smoothedThc(byDay, keys) {
   const firstEntryDay = Object.keys(byDay).sort()[0] ?? keys[0];
@@ -579,7 +655,8 @@ function renderTrends() {
     <h2>Symptoms (${TREND_WINDOW_DAYS}-day average, 0–10)</h2>
     <div class="card"><div id="chart-scores" class="chart"></div></div>
     <h2>Notes <span class="muted" id="notes-day">(tap a day on a chart)</span></h2>
-    <div class="card" id="notes-list"><span class="muted">–</span></div>`;
+    <div class="card" id="notes-list"><span class="muted">–</span></div>
+    ${correlationsCard()}`;
 
   const width = $("#chart-mg").clientWidth;
   const css = getComputedStyle(document.documentElement);
@@ -734,6 +811,25 @@ function renderSettings() {
         <button>Add</button>
       </form>
     </div>
+
+    <h2>Context tags <span class="muted">(meds, habits; tap to remove)</span></h2>
+    <div class="card"><div class="row">${contextTagsOf(settings)
+      .map(
+        (t, i) =>
+          `<button class="chip context" aria-pressed="true" data-context-remove="${i}">${esc(t.tag)}${t.unit ? ` (${t.unit})` : ""} ${t.kind === "beneficial" ? "+" : ""} ✕</button>`,
+      )
+      .join(" ")}</div>
+      <form class="row" id="context-form" style="margin-top:8px">
+        <input name="contextTag" placeholder="e.g. a medication name" required style="flex:2" />
+        <select name="kind" style="flex:1">${CONTEXT_KINDS.map((k) => `<option value="${k}">${k}</option>`).join("")}</select>
+        <select name="unit" style="flex:1">${CONTEXT_UNITS.map((u) => `<option value="${u}">${u || "no value"}</option>`).join("")}</select>
+        <button>Add</button>
+      </form>
+    </div>
+
+    <h2>Doctor report</h2>
+    <div class="card"><p class="muted">One A4 page in German, black/white: 4 weeks + 6 months, THC next to symptoms and tags.</p>
+      <button type="button" class="primary" data-report="pdf">Doctor report (PDF)</button></div>
 
     <h2>Watch tags <span class="muted">(cravings etc., tap to remove)</span></h2>
     <div class="card"><div class="row">${watchTagsOf(settings)
@@ -928,6 +1024,7 @@ let editingEntry = null; // the entry being edited, or null for a new one
 let draftScores = {};
 let draftEffects = [];
 let draftWatch = []; // watch tag names
+let draftContext = []; // [{ tag, value }] medication, habits
 
 /** Dose fields only make sense when something was taken. */
 function isNoDoseChecked() {
@@ -986,6 +1083,7 @@ function openEntryDialog(entry) {
   draftScores = { ...(entry?.scores ?? {}) };
   draftEffects = [...(entry?.effects ?? [])];
   draftWatch = [...(entry?.watch ?? [])];
+  draftContext = (entry?.context ?? []).map((item) => ({ ...item }));
   // No products yet: only a no-dose entry (craving, event) is possible.
   form.noDose.checked = (entry && !isDose(entry)) || state.strains.length === 0;
 
@@ -1051,6 +1149,35 @@ function renderEntryChoices() {
       return `<button type="button" class="chip watch" data-watch="${esc(t.tag)}" aria-pressed="${pressed}">${esc(t.tag)}</button>`;
     })
     .join(" ");
+
+  renderContextChoices();
+}
+
+/** Context chips; selected tags that have a unit get a number field (e.g. medication 20 mg). */
+function renderContextChoices() {
+  const tags = contextTagsOf(state.settings);
+  const chips = tags.map((t) => {
+    const pressed = draftContext.some((item) => item.tag === t.tag);
+    return `<button type="button" class="chip context" data-context="${esc(t.tag)}" aria-pressed="${pressed}">${esc(t.tag)}</button>`;
+  });
+  const fields = draftContext
+    .map((item) => {
+      const unit = tags.find((t) => t.tag === item.tag)?.unit ?? "";
+      if (!unit) return "";
+      return `<label class="row" style="flex-wrap:nowrap"><span style="min-width:40%">${esc(item.tag)} (${unit === "x" ? "count" : unit})</span>
+        <input type="number" inputmode="decimal" step="any" min="0" data-context-value="${esc(item.tag)}" value="${item.value ?? ""}" /></label>`;
+    })
+    .join("");
+  $("#entry-context").innerHTML = `<div class="row">${chips.join(" ")}</div>${fields}`;
+}
+
+/** Number typed next to a selected context tag. Empty = no value. */
+function onContextValueInput(event) {
+  const tag = event.target.dataset?.contextValue;
+  if (!tag) return;
+  const item = draftContext.find((i) => i.tag === tag);
+  const text = event.target.value.trim();
+  item.value = text === "" ? null : Number(text);
 }
 
 function readEntryForm() {
@@ -1062,6 +1189,7 @@ function readEntryForm() {
     scores: { ...draftScores },
     effects: [...draftEffects],
     watch: [...draftWatch],
+    context: draftContext.map((item) => ({ ...item })),
   };
   if (editingSip()) return { ...common, sipOf: editingEntry.sipOf };
   if (isNoDoseChecked()) return { ...common, noDose: true };
@@ -1206,13 +1334,17 @@ function onViewClick(event) {
     view = "day";
   } else if (data.symptomRemove) state.settings.symptoms.splice(Number(data.symptomRemove), 1);
   else if (data.tagRemove) state.settings.effectTags.splice(Number(data.tagRemove), 1);
-  else if (data.watchRemove) {
+  else if (data.contextRemove) {
+    state.settings.contextTags = contextTagsOf(state.settings); // older data: start from the defaults
+    state.settings.contextTags.splice(Number(data.contextRemove), 1);
+  } else if (data.watchRemove) {
     state.settings.watchTags = watchTagsOf(state.settings); // older data: start from the defaults
     state.settings.watchTags.splice(Number(data.watchRemove), 1);
   } else if (data.id) return openEntryDialog(state.entries.find((e) => e.id === data.id));
   else if (data.strain) return openStrainDialog(strainById(data.strain));
   else if (target.id === "strain-add") return openStrainDialog(null);
   else if (target.id === "calc-log") return logCalcPlan();
+  else if (data.report) return printDoctorReport();
   else if (data.calcProduct) return toggleCalcProduct(data.calcProduct);
   else if (data.calcThc) return setCalcField("thcMg", data.calcThc);
   else if (data.calcCbd) return setCalcField("cbdMg", data.calcCbd);
@@ -1256,6 +1388,12 @@ function onViewSubmit(event) {
     else if (limit > 0) state.settings.dailyLimitMg = limit;
     else return alert(`Ceiling ${text} must be a number > 0, or empty for off`);
   }
+  if (form.id === "context-form") {
+    const tag = form.contextTag.value.trim();
+    state.settings.contextTags = contextTagsOf(state.settings); // older data: start from the defaults
+    if (state.settings.contextTags.some((t) => t.tag === tag)) return alert(`"${tag}" already exists`);
+    state.settings.contextTags.push({ tag, kind: form.kind.value, unit: form.unit.value });
+  }
   if (form.id === "watch-form") {
     const tag = form.watchTag.value.trim();
     state.settings.watchTags = watchTagsOf(state.settings); // older data: start from the defaults
@@ -1272,9 +1410,14 @@ function onViewSubmit(event) {
 
 /** Score buttons and effect chips in the entry dialog. */
 function onEntryChoiceClick(event) {
-  const button = event.target.closest("button[data-score], button[data-effect], button[data-watch]");
+  const button = event.target.closest("button[data-score], button[data-effect], button[data-watch], button[data-context]");
   if (!button) return;
-  const { score, value, effect, watch } = button.dataset;
+  const { score, value, effect, watch, context } = button.dataset;
+  if (context) {
+    const alreadyOn = draftContext.some((item) => item.tag === context);
+    if (alreadyOn) draftContext = draftContext.filter((item) => item.tag !== context);
+    else draftContext.push({ tag: context, value: null });
+  }
   if (watch) {
     if (draftWatch.includes(watch)) draftWatch = draftWatch.filter((tag) => tag !== watch);
     else draftWatch.push(watch);
@@ -1317,6 +1460,7 @@ function wireEvents() {
   const entryForm = $("#entry-form");
   entryForm.addEventListener("click", onEntryChoiceClick);
   entryForm.addEventListener("input", updateEntryPreview);
+  entryForm.addEventListener("input", onContextValueInput);
   entryForm.strainId.addEventListener("change", () => {
     entryForm.route.value = defaultRoute();
     updateEntryPreview();

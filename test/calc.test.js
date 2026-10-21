@@ -13,19 +13,25 @@ import {
   isSip,
   mean,
   median,
+  pearson,
   planForMg,
   productMg,
   ratioText,
+  relationDirection,
   rollingAverage,
   SOURCES,
   slope,
   smoothTrend,
+  strengthLabel,
   summarize,
+  tagComparisons,
   thcShare,
   trend,
   usageChange,
+  useCorrelations,
   useFreeDays,
   weeklyRate,
+  weeklySeries,
   weekStart,
 } from "../calc.js";
 
@@ -250,4 +256,57 @@ test("vaporizer load: mg split evenly over fill + sips, scaled by how much was u
   assert.equal(afterMidnight["2026-10-19"][0].amount, 75); // the sip counts on the day it happened
   assert.equal(useFreeDays(["2026-10-19"], afterMidnight), 0);
   assert.equal(isSip(sip("x", 18, 9)), true);
+});
+
+test("pearson: exact on straight lines, skips gaps, needs enough days", () => {
+  const xs = Array.from({ length: 12 }, (_, i) => i);
+  assert.ok(
+    Math.abs(
+      pearson(
+        xs,
+        xs.map((x) => 2 * x + 1),
+      ).r - 1,
+    ) < 1e-12,
+  );
+  assert.ok(
+    Math.abs(
+      pearson(
+        xs,
+        xs.map((x) => -x),
+      ).r + 1,
+    ) < 1e-12,
+  );
+  const withGaps = xs.map((x) => (x % 4 === 0 ? null : x));
+  assert.equal(pearson(xs, withGaps).n, 9);
+  assert.equal(pearson(xs, withGaps).r, null); // 9 < 10 paired days
+  assert.equal(pearson(xs, Array(12).fill(5)).r, null); // no variation
+  assert.equal(strengthLabel(0.05), "none");
+  assert.equal(strengthLabel(-0.35), "moderate");
+  assert.equal(strengthLabel(null), "too few");
+  assert.equal(relationDirection(-0.6, false), "better"); // more THC, less pain
+  assert.equal(relationDirection(-0.6, true), "worse"); // more THC, lower mood
+});
+
+test("use correlations: same day, next day, use-free vs use days; tag comparisons; weekly series", () => {
+  const pain = { name: "pain", higherIsBetter: false };
+  // 20 days: THC 0 or 10 alternating; pain is high the day AFTER use.
+  const days = Array.from({ length: 20 }, (_, i) => ({
+    key: `2026-10-${String(i + 1).padStart(2, "0")}`,
+    thc: i % 2 === 0 ? 10 : 0,
+    scores: { pain: i % 2 === 1 ? 8 : 2 },
+    tags: i % 4 === 0 ? { exercise: 1 } : {},
+  }));
+  const [row] = useCorrelations(days, [pain]);
+  assert.ok(row.sameDay.r < -0.99); // use days have low pain
+  assert.ok(row.nextDay.r > 0.99); // pain high the day after use
+  assert.equal(row.freeMean, 8);
+  assert.equal(row.useMean, 2);
+  const [exercise] = tagComparisons(days, ["exercise", "rare"], [pain]);
+  assert.equal(exercise.tag, "exercise");
+  assert.equal(exercise.daysWith, 5);
+  assert.equal(exercise.thcWith, 10);
+  assert.equal(tagComparisons(days, ["rare"], [pain]).length, 0); // fewer than 3 days → left out
+  const weeks = weeklySeries(days);
+  assert.equal(weeks[0].key, weekStart("2026-10-01"));
+  assert.ok(weeks.every((w) => w.thcPerDay >= 0 && w.scores.pain != null));
 });

@@ -21,12 +21,13 @@ Private medical cannabis log. Static PWA, browser-only, GitHub Pages. No framewo
 - Educational/personal log: never phrase output as dosing advice.
 - Generic names only (no brands in code/docs except as user data).
 
-## Layout (dependency: app → store → calc)
+## Layout (dependency: app → report → calc, app → store → calc)
 | File | Role |
 |---|---|
 | `calc.js` | pure math: mg per entry (raw/decarb/absorbed), ratio, dates, summaries, trends |
 | `store.js` | data shape, validation, localStorage, JSON/CSV backup, merge |
 | `app.js` | DOM only: views, dialogs, charts, events |
+| `report.js` | German A4 doctor report: HTML + SVG strings, no DOM (app prints it) |
 | `index.html` | markup + CSS (mobile first, light/dark) |
 | `sw.js`, `manifest.webmanifest`, `icon.svg`, `icons/` | offline + install; PNGs from `make icons` (`tools/icons.mjs`) |
 | `vendor/` | uPlot 1.6.32 (MIT), vendored on purpose |

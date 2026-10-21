@@ -11,5 +11,6 @@ Every number in `calc.js` comes from here. Test `test/calc.test.js` fails if a U
 | CBD oral bioavailability | 6% | **assumed** (no human absolute value) | [Millar 2018](https://doi.org/10.3389/fphar.2018.01365) |
 | Trend smoothing α | 0.1 (trend moves 10% toward each day) | method choice | [Walker, The Hacker's Diet](https://www.fourmilab.ch/hackdiet/) |
 | Label accuracy (context for 5% "stable") | 17% of edibles labeled within ±10% | measured (n=75 products) | [Vandrey 2015](https://doi.org/10.1001/jama.2015.6613) |
+| Correlation strength words | \|r\| 0.1 weak, 0.3 moderate, 0.5 strong | convention | [Cohen 1988](https://doi.org/10.4324/9780203771587) |
 
 Same sources as the sibling project Halflives (`docs/presets.md` there).

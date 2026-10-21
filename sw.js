@@ -2,13 +2,14 @@
 // Offline support. Network first, revalidated every time (so updates show up at once), cache as fallback when offline.
 // Bump CACHE when the file list changes.
 
-const CACHE = "cannalog-v3";
+const CACHE = "cannalog-v4";
 const FILES = [
   "./",
   "index.html",
   "app.js",
   "calc.js",
   "store.js",
+  "report.js",
   "manifest.webmanifest",
   "icon.svg",
   "icons/icon-192.png",

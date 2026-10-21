@@ -40,6 +40,7 @@ export function defaultSettings() {
       { tag: "dizzy", good: false },
     ],
     watchTags: defaultWatchTags(),
+    contextTags: defaultContextTags(),
   };
 }
 
@@ -58,6 +59,29 @@ export function defaultWatchTags() {
     "withdrawal: sleep",
     "withdrawal: irritable",
   ].map((tag) => ({ tag }));
+}
+
+// Context = neutral or beneficial things worth seeing next to cannabis use: medication, habits.
+export const CONTEXT_KINDS = ["beneficial", "neutral"];
+// Unit of the optional number logged with a context tag ("" = just yes/no). "x" = count (cups, drinks).
+export const CONTEXT_UNITS = ["", "mg", "h", "min", "x"];
+
+export function defaultContextTags() {
+  return [
+    { tag: "medication", kind: "neutral", unit: "mg" },
+    { tag: "exercise", kind: "beneficial", unit: "min" },
+    { tag: "sleep", kind: "neutral", unit: "h" },
+    { tag: "therapy", kind: "beneficial", unit: "" },
+    { tag: "meditation", kind: "beneficial", unit: "min" },
+    { tag: "social time", kind: "beneficial", unit: "" },
+    { tag: "caffeine", kind: "neutral", unit: "x" },
+    { tag: "alcohol", kind: "neutral", unit: "x" },
+  ];
+}
+
+/** contextTags was added after v1 shipped: older data has none, so fall back to the defaults. */
+export function contextTagsOf(settings) {
+  return settings.contextTags ?? defaultContextTags();
 }
 
 /** watchTags was added after v1 shipped: older data has none, so fall back to the defaults. */
@@ -137,7 +161,17 @@ export function validateEntry(entry) {
   // watch: optional list of tag names (added after v1 shipped).
   const watch = entry.watch ?? [];
   check(Array.isArray(watch) && watch.every(isText), `${label}: watch must be a list of tag names`);
-  if (!isDose(entry)) check(watch.length > 0 || entry.note.trim() !== "", `${label}: entry without dose needs a watch tag or a note`);
+  // context: optional list of { tag, value } (added after v1 shipped). value: number or null.
+  const context = entry.context ?? [];
+  check(Array.isArray(context), `${label}: context must be a list`);
+  for (const item of context) {
+    const valueOk = item?.value == null || (isNumber(item.value) && item.value >= 0);
+    check(isText(item?.tag) && valueOk, `${label}: bad context ${JSON.stringify(item)} (needs tag and a value ≥ 0 or none)`);
+  }
+  if (!isDose(entry)) {
+    const hasContent = watch.length > 0 || context.length > 0 || Object.keys(entry.scores ?? {}).length > 0 || entry.note.trim() !== "";
+    check(hasContent, `${label}: entry without dose needs a tag, a score or a note`);
+  }
 }
 
 /** Throws a readable Error if `state` is unusable; returns it otherwise. */
@@ -161,6 +195,15 @@ export function validate(state) {
   check(Array.isArray(settings.symptoms), "settings.symptoms must be a list");
   check(Array.isArray(settings.effectTags), "settings.effectTags must be a list");
   check(settings.watchTags === undefined || Array.isArray(settings.watchTags), "settings.watchTags must be a list");
+  for (const item of settings.contextTags ?? []) {
+    const label = `context tag ${JSON.stringify(item?.tag)}`;
+    check(isText(item?.tag) && item.tag.trim() !== "", `${label} needs a name`);
+    check(CONTEXT_KINDS.includes(item.kind), `${label}: kind "${item.kind}" must be one of ${CONTEXT_KINDS.join(", ")}`);
+    check(
+      CONTEXT_UNITS.includes(item.unit),
+      `${label}: unit "${item.unit}" must be one of ${CONTEXT_UNITS.map((u) => u || "(none)").join(", ")}`,
+    );
+  }
   return state;
 }
 
@@ -209,6 +252,16 @@ export function merge(current, backup) {
   return { ...current, strains: [...strains.values()], entries: [...entries.values()] };
 }
 
+/** "exercise 30; medication 20" for CSV. */
+function contextText(context) {
+  const parts = [];
+  for (const item of context ?? []) {
+    if (item.value == null) parts.push(item.tag);
+    else parts.push(`${item.tag} ${item.value}`);
+  }
+  return parts.join("; ");
+}
+
 function csvCell(value) {
   const text = String(value ?? "");
   if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
@@ -236,6 +289,7 @@ export function toCsv(state) {
     "good_effects",
     "bad_effects",
     "watch",
+    "context",
     "load_id",
     "note",
   ];
@@ -264,6 +318,7 @@ export function toCsv(state) {
         tags(true),
         tags(false),
         (entry.watch ?? []).join("; "),
+        contextText(entry.context),
         entry.sipOf ?? (entry.load ? entry.id : ""),
         entry.note,
       ];
