@@ -47,7 +47,16 @@ const GERMAN = {
   "withdrawal: sleep": "Entzug: Schlaf",
   "withdrawal: irritable": "Entzug: Reizbarkeit",
 };
-const STRENGTH = { none: "kein", weak: "schwach", moderate: "mittel", strong: "stark", "too few": "zu wenige Tage" };
+const STRENGTH = {
+  none: "kein",
+  weak: "schwach",
+  moderate: "mittel",
+  strong: "stark",
+  "too few": "zu wenige Tage",
+  "no variation x": "THC immer gleich",
+  "no variation y": "Beschwerde immer gleich",
+};
+const SKIP_REASON = { "every day": "jeden Tag", rare: "nur" };
 const DIRECTION = { better: "mehr THC – besser", worse: "mehr THC – schlechter" };
 
 // Line styles for symptoms: black only, told apart by dash pattern and marker shape (b/w print).
@@ -216,7 +225,7 @@ function rText(result) {
 }
 
 function verdict(result, symptom) {
-  const strength = strengthLabel(result.r);
+  const strength = strengthLabel(result);
   const direction = relationDirection(result.r, symptom.higherIsBetter);
   if (!direction) return STRENGTH[strength];
   return `${STRENGTH[strength]}: ${DIRECTION[direction]}`;
@@ -243,19 +252,30 @@ function correlationTable(shortDays, longDays, symptoms) {
   </table>`;
 }
 
+/** "Medikament (jeden Tag), Alkohol (nur 2 Tage)": tags that can't be compared, so the doctor knows they were logged. */
+function skippedLine(skipped) {
+  if (skipped.length === 0) return "";
+  const parts = skipped.map((s) => {
+    if (s.reason === "every day") return `${esc(german(s.tag))} (${SKIP_REASON["every day"]})`;
+    return `${esc(german(s.tag))} (${SKIP_REASON.rare} ${s.daysWith} ${s.daysWith === 1 ? "Tag" : "Tage"})`;
+  });
+  return `<p class="muted">Ohne Vergleich (mind. 3 Tage mit und ohne nötig): ${parts.join(", ")}</p>`;
+}
+
 function factorTable(longDays, tags, symptoms) {
-  const rows = tagComparisons(longDays, tags, symptoms)
+  const { rows, skipped } = tagComparisons(longDays, tags, symptoms);
+  const tableRows = rows
     .sort((a, b) => Math.abs(b.thcWith - b.thcWithout) - Math.abs(a.thcWith - a.thcWithout))
     .slice(0, MAX_FACTOR_ROWS)
     .map((row) => {
       const change = row.symptom ? `${esc(german(row.symptom.name))}: ${num(row.scoreWith)} mit / ${num(row.scoreWithout)} ohne` : "–";
       return `<tr><td>${esc(german(row.tag))}</td><td>${row.daysWith}</td><td>${num(row.thcWith)} / ${num(row.thcWithout)}</td><td>${change}</td></tr>`;
     });
-  if (rows.length === 0) return `<p class="muted">Zu wenige Tage mit Begleitfaktoren (mind. 3 Tage mit und ohne).</p>`;
+  if (tableRows.length === 0) return skippedLine(skipped) || `<p class="muted">Keine Begleitfaktoren eingetragen.</p>`;
   return `<table class="data">
     <tr><th>Begleitfaktor</th><th>Tage</th><th>Ø mg THC/Tag mit / ohne</th><th>Größter Unterschied bei Beschwerden</th></tr>
-    ${rows.join("")}
-  </table>`;
+    ${tableRows.join("")}
+  </table>${skippedLine(skipped)}`;
 }
 
 /**

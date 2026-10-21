@@ -65,7 +65,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-21.1";
+const APP_VERSION = "2026-10-21.2";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -559,7 +559,15 @@ function watchLast7VsPrev7(today) {
   return `<p class="muted">Watch, last 7 days</p>${rows}`;
 }
 
-const STRENGTH_WORDS = { none: "no link", weak: "weak", moderate: "moderate", strong: "strong", "too few": "too few days" };
+const STRENGTH_WORDS = {
+  none: "no link",
+  weak: "weak",
+  moderate: "moderate",
+  strong: "strong",
+  "too few": "too few days",
+  "no variation x": "THC always the same",
+  "no variation y": "score always the same",
+};
 
 /** "less pain", "higher mood": how the symptom moves when it gets better or worse. */
 function symptomChangeWords(symptom, direction) {
@@ -576,17 +584,21 @@ function correlationsCard() {
   const symptoms = state.settings.symptoms;
   const rows = useCorrelations(days, symptoms).map((row) => {
     const direction = relationDirection(row.sameDay.r, row.symptom.higherIsBetter);
-    const words = STRENGTH_WORDS[strengthLabel(row.sameDay.r)];
+    const words = STRENGTH_WORDS[strengthLabel(row.sameDay)];
     const verdict = direction ? `${words}: more THC, ${symptomChangeWords(row.symptom, direction)}` : words;
     const css = direction ?? "same";
     const r = row.sameDay.r == null ? "–" : row.sameDay.r.toFixed(2);
     return `<tr><td>${esc(row.symptom.name)}</td><td>${row.freeMean == null ? "–" : round1(row.freeMean)}</td><td>${row.useMean == null ? "–" : round1(row.useMean)}</td><td>${r}</td><td class="${css}">${verdict}</td></tr>`;
   });
   const tags = [...contextTagsOf(state.settings), ...watchTagsOf(state.settings)].map((t) => t.tag);
-  const factors = tagComparisons(days, tags, symptoms).map(
+  const comparisons = tagComparisons(days, tags, symptoms);
+  const factors = comparisons.rows.map(
     (f) =>
       `<div class="row spread"><span class="chip">${esc(f.tag)}</span><span>${f.daysWith} days · THC ${round1(f.thcWith)} with / ${round1(f.thcWithout)} without (mg/day)</span></div>`,
   );
+  // Tags logged (almost) every day or only 1–2 times can't be compared; say so instead of hiding them.
+  const skipped = comparisons.skipped.map((s) => `${esc(s.tag)} (${s.reason === "every day" ? "every day" : `only ${s.daysWith}×`})`);
+  if (skipped.length) factors.push(`<p class="muted">Not comparable (need ≥ 3 days with and without): ${skipped.join(", ")}</p>`);
   return `<h2>Correlations <span class="muted">(6 months, same day)</span></h2>
     <div class="card" style="overflow-x:auto">
       <table><thead><tr><th></th><th>use-free</th><th>use days</th><th>r</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>

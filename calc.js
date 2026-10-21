@@ -488,7 +488,9 @@ export function dailySeries(keys, byDay, mode) {
 
 /**
  * Pearson correlation of two equally long lists; pairs where either value is null/undefined are skipped.
- * { r, n }: r is null when fewer than MIN_PAIRED_DAYS pairs, or when one side never changes.
+ * { r, n, reason }: r is null when there are fewer than MIN_PAIRED_DAYS pairs (reason "too few")
+ * or when one side never changes (reason "no variation x" / "no variation y": with 180 days of the
+ * same THC amount there is plenty of data, just nothing to correlate, so say that instead of "too few").
  */
 export function pearson(xs, ys) {
   const pairs = [];
@@ -497,7 +499,7 @@ export function pearson(xs, ys) {
     pairs.push([xs[i], ys[i]]);
   }
   const n = pairs.length;
-  if (n < MIN_PAIRED_DAYS) return { r: null, n };
+  if (n < MIN_PAIRED_DAYS) return { r: null, n, reason: "too few" };
   const meanX = mean(pairs.map((p) => p[0]));
   const meanY = mean(pairs.map((p) => p[1]));
   let sumXY = 0;
@@ -508,14 +510,18 @@ export function pearson(xs, ys) {
     sumXX += (x - meanX) ** 2;
     sumYY += (y - meanY) ** 2;
   }
-  if (sumXX === 0 || sumYY === 0) return { r: null, n }; // no variation: correlation undefined
-  return { r: sumXY / Math.sqrt(sumXX * sumYY), n };
+  if (sumXX === 0) return { r: null, n, reason: "no variation x" };
+  if (sumYY === 0) return { r: null, n, reason: "no variation y" };
+  return { r: sumXY / Math.sqrt(sumXX * sumYY), n, reason: null };
 }
 
-/** "none" | "weak" | "moderate" | "strong", or "too few" when r is null. */
-export function strengthLabel(r) {
-  if (r == null) return "too few";
-  const size = Math.abs(r);
+/**
+ * Word for a pearson() result: "none" | "weak" | "moderate" | "strong",
+ * or why there is no r: "too few" | "no variation x" | "no variation y".
+ */
+export function strengthLabel(result) {
+  if (result.r == null) return result.reason;
+  const size = Math.abs(result.r);
   if (size < R_WEAK) return "none";
   if (size < R_MODERATE) return "weak";
   if (size < R_STRONG) return "moderate";
@@ -561,14 +567,25 @@ export function useCorrelations(days, symptoms) {
 
 /**
  * Per tag: days with/without it, mean THC with/without, and the symptom that differs most.
- * Tags with fewer than MIN_GROUP_DAYS days on either side are left out.
+ * { rows, skipped }: a tag with fewer than MIN_GROUP_DAYS days on either side can't be compared;
+ * it goes to skipped with reason "every day" (e.g. daily medication) or "rare", so the report can say so.
+ * Tags never logged in the period are not listed at all.
  */
 export function tagComparisons(days, tags, symptoms) {
   const rows = [];
+  const skipped = [];
   for (const tag of tags) {
     const withTag = days.filter((d) => (d.tags[tag] ?? 0) > 0);
     const without = days.filter((d) => !((d.tags[tag] ?? 0) > 0));
-    if (withTag.length < MIN_GROUP_DAYS || without.length < MIN_GROUP_DAYS) continue;
+    if (withTag.length === 0) continue;
+    if (without.length < MIN_GROUP_DAYS) {
+      skipped.push({ tag, daysWith: withTag.length, reason: "every day" });
+      continue;
+    }
+    if (withTag.length < MIN_GROUP_DAYS) {
+      skipped.push({ tag, daysWith: withTag.length, reason: "rare" });
+      continue;
+    }
     const row = {
       tag,
       daysWith: withTag.length,
@@ -590,7 +607,7 @@ export function tagComparisons(days, tags, symptoms) {
     }
     rows.push(row);
   }
-  return rows;
+  return { rows, skipped };
 }
 
 /** Days grouped into weeks (Monday start) for the long-term view: { weekKey, thcPerDay, scores: { name: mean } }. */

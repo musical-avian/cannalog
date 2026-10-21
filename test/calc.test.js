@@ -280,9 +280,11 @@ test("pearson: exact on straight lines, skips gaps, needs enough days", () => {
   assert.equal(pearson(xs, withGaps).n, 9);
   assert.equal(pearson(xs, withGaps).r, null); // 9 < 10 paired days
   assert.equal(pearson(xs, Array(12).fill(5)).r, null); // no variation
-  assert.equal(strengthLabel(0.05), "none");
-  assert.equal(strengthLabel(-0.35), "moderate");
-  assert.equal(strengthLabel(null), "too few");
+  assert.equal(strengthLabel({ r: 0.05 }), "none");
+  assert.equal(strengthLabel({ r: -0.35 }), "moderate");
+  assert.equal(strengthLabel(pearson(xs, withGaps)), "too few");
+  assert.equal(strengthLabel(pearson(Array(12).fill(5), xs)), "no variation x"); // same THC every day: enough days, nothing to compare
+  assert.equal(strengthLabel(pearson(xs, Array(12).fill(5))), "no variation y");
   assert.equal(relationDirection(-0.6, false), "better"); // more THC, less pain
   assert.equal(relationDirection(-0.6, true), "worse"); // more THC, lower mood
 });
@@ -301,12 +303,32 @@ test("use correlations: same day, next day, use-free vs use days; tag comparison
   assert.ok(row.nextDay.r > 0.99); // pain high the day after use
   assert.equal(row.freeMean, 8);
   assert.equal(row.useMean, 2);
-  const [exercise] = tagComparisons(days, ["exercise", "rare"], [pain]);
+  const [exercise] = tagComparisons(days, ["exercise", "rare"], [pain]).rows;
   assert.equal(exercise.tag, "exercise");
   assert.equal(exercise.daysWith, 5);
   assert.equal(exercise.thcWith, 10);
-  assert.equal(tagComparisons(days, ["rare"], [pain]).length, 0); // fewer than 3 days → left out
+  assert.equal(tagComparisons(days, ["never logged"], [pain]).skipped.length, 0); // never logged → not mentioned
   const weeks = weeklySeries(days);
   assert.equal(weeks[0].key, weekStart("2026-10-01"));
   assert.ok(weeks.every((w) => w.thcPerDay >= 0 && w.scores.pain != null));
+});
+
+test("minimums never hide sensible results: daily user still gets r; every-day and rare tags are reported, not dropped", () => {
+  const pain = { name: "pain", higherIsBetter: false };
+  // 30 days, used every day (no use-free day), amount varies, pain follows the amount; medication daily; alcohol twice.
+  const days = Array.from({ length: 30 }, (_, i) => ({
+    key: `2026-09-${String(i + 1).padStart(2, "0")}`,
+    thc: 10 + (i % 5) * 4,
+    scores: { pain: 8 - (i % 5) },
+    tags: { medication: 1, ...(i === 3 || i === 17 ? { alcohol: 1 } : {}) },
+  }));
+  const [row] = useCorrelations(days, [pain]);
+  assert.equal(row.freeN, 0); // no use-free days...
+  assert.ok(row.sameDay.r < -0.99); // ...but the correlation is still there
+  const { rows, skipped } = tagComparisons(days, ["medication", "alcohol"], [pain]);
+  assert.equal(rows.length, 0);
+  assert.deepEqual(skipped, [
+    { tag: "medication", daysWith: 30, reason: "every day" },
+    { tag: "alcohol", daysWith: 2, reason: "rare" },
+  ]);
 });

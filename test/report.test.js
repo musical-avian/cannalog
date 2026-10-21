@@ -43,5 +43,6 @@ test("report: German, one SVG per view, tag strips, correlation table", () => {
   assert.match(html, />Bewegung</); // exercise strip, German name
   assert.match(html, /Schmerz/);
   assert.match(html, /stark: mehr THC – besser/); // pain 3 on use days vs 7 on free days
+  assert.doesNotMatch(html, /Ohne Vergleich/); // exercise every 3rd day is comparable
   assert.doesNotMatch(html, /NaN|undefined/);
 });

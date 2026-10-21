@@ -23,7 +23,7 @@ Personal log. Not medical or dosing advice.
 | Calculator amount steps (1 mg, 0.05 ml, ¼ unit) | what can realistically be measured (scale, ~1 drop, cut edible) |
 | "urge resisted" = the one watch tag where more is good | design choice |
 | r only from 10 paired days | below that, one odd day swings r a lot; chosen, not a statistical rule |
-| Tag comparison only with ≥ 3 days with and without | same reason; chosen |
+| Tag comparison only with ≥ 3 days with and without | same reason; chosen. Only gates the factor table, never THC ↔ symptom r; skipped tags are named (every day / only n×) |
 | Vaporizer load counts fully | how much a dry-herb vape really extracts is unknown (temperature, draws); a consistent upper bound keeps trends comparable |
 
 ## Not modeled
