@@ -17,8 +17,10 @@ Personal log. Not medical or dosing advice.
 | Value | Why |
 |---|---|
 | Trend smoothing α = 0.1 | Hacker's Diet default. Memory ≈ 1/α = 10 days, half-life ≈ 6.6 days (ln ½ / ln 0.9). One heavy day moves the trend only 10% of its excess; a real, lasting change shows ~65% within 10 days. Evens out weekday/weekend swings without hiding a 2-week change. |
-| Rate window 28 days | long enough to ignore one odd week |
-| "Stable" = change ≤ 5% of mean | Below what the input can resolve: labels are often off by >10% ([Vandrey 2015](https://doi.org/10.1001/jama.2015.6613): 17% of edibles within ±10%), a kitchen scale ±10 mg on 100 mg = ±10%. Still small enough that +5%/week creep shows within ~4 weeks (≈ +20%). |
+| Trend smoothing vs Libra | Libra: τ 7 days, time-aware (`1 − e^(−Δt/τ)`) ≈ α 0.133 for daily values. Our series has one value per day, so time-awareness changes nothing; 0.1 vs 0.133 only changes how fast the chart line follows. |
+| Rate window 28 days (info only, D29) | judgement call: long enough to ignore one odd week. Too slow and too jumpy as the main signal: one heavy day flags "rising" ~99% of the time (simulation below). Libra's 7-day regression over the trend was worse (62% false alarms on flat use). |
+| Level check: median last 7 days vs 28 before, ±10% (main signal) | chosen from a simulation (10 mg/day, no days off, 300 runs; day-to-day noise ±15% / ±30%): flags flat use 10% / 27%, a single 30 mg day 26% / 42%; notices +20% after 6 / 8 days, +50% after 5 / 4 days. 15% would cut false alarms but miss +20% for weeks. Noisier days = later detection; no window beats that. Needs ≥ 7 days of baseline; days before the first entry are not counted. |
+| "Stable" = change ≤ 5% of mean (slope, week means) | Below what the input can resolve: labels are often off by >10% ([Vandrey 2015](https://doi.org/10.1001/jama.2015.6613): 17% of edibles within ±10%), a kitchen scale ±10 mg on 100 mg = ±10%. Still small enough that +5%/week creep shows within ~4 weeks (≈ +20%). |
 | Personal ceiling | the user's own number, not a recommendation |
 | Calculator amount steps (1 mg, 0.05 ml, ¼ unit) | what can realistically be measured (scale, ~1 drop, cut edible) |
 | "urge resisted" = the one watch tag where more is good | design choice |

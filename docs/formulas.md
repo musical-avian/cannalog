@@ -36,7 +36,8 @@ Charts use decarb when mode = absorbed (D5 in plan.md). Week table uses the uppe
 Goal: stay as low as possible. All on THC mg/day in chart mode (decarb when mode = absorbed).
 - **Days without use = 0 mg** (real data), unlike symptom scores (missing = gap).
 - **Smoothed trend** (chart line): `trend = previous + 0.1 × (today − previous)`, started at the first logged day so it is warmed up before the visible range. Hacker's Diet method (same idea as Libra).
-- **Weekly rate**: least-squares slope of the last 28 days × 7 → "mg/day per week". |rate| ≤ 5% of the 28-day mean → "stable"; up = red, down = green.
+- **Level check (main signal, `levelChange`)**: median mg/day of the last 7 days vs median of the 28 days before. More than 10% higher → "rising" (red ▲), 10% lower → "falling" (green ▼), else "stable". Median, so one heavy day doesn't flag; 7 days, so a new dose shows within about a week, before getting used to it. Days before the first entry are left out (unknown ≠ 0 mg); needs ≥ 7 baseline days, else "needs n more days". Numbers + trade-off: `docs/limits.md`.
+- **Slope (info only)**: least-squares slope of the last 28 days × 7 → "mg/day per week", shown muted, no color.
 - **Mean and median** mg/day per week (median ignores a single heavy day); compared to previous week with the same 5% rule (min 0.1 mg).
 - **Use-free days** per week; more = green.
 - **Arrows**: ▲/▼ = real direction, color = good/bad (pain ▼ green, THC ▲ red).
@@ -76,7 +77,7 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 
 ## 11. Doctor report (`report.js`)
 - German, one A4 page, black/white (print → "Save as PDF").
-- **Summary block at the top**: 6-month sparkline of weekly Ø THC/day + key numbers (Ø, median, use-free days, 4-week trend ▲▼=, CBD); per symptom a bar of |r| (ticks at 0.1/0.3/0.5; black = more THC goes with better, hatched = worse, grey = none) + words; strongest factor (biggest THC difference with/without a tag) and strongest amount r.
+- **Summary block at the top**: 6-month sparkline of weekly Ø THC/day + key numbers (Ø, median, use-free days, level check last 7 days ▲▼= with slope, CBD); per symptom a bar of |r| (ticks at 0.1/0.3/0.5; black = more THC goes with better, hatched = worse, grey = none) + words; strongest factor (biggest THC difference with/without a tag) and strongest amount r.
 - Amounts table: r of logged amounts (sleep h, medication mg) with THC and the strongest symptom; amounts that never change are left out (stay "ohne Vergleich").
 - Factor and amount tables side by side; row limits (4 factors, 3 amounts, 8 tag strips) keep it on one page; checked with a worst-case dataset (all 8 context + 5 watch tags, 4 symptoms) via Playwright page.pdf.
 - 4 weeks daily: grey THC bars + black symptom lines (dash + marker per symptom, 0–10) + one strip per tag (■ = logged that day), all on the same columns.

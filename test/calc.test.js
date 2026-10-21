@@ -11,6 +11,8 @@ import {
   groupByDay,
   isDose,
   isSip,
+  keysSinceFirstEntry,
+  levelChange,
   mean,
   median,
   pearson,
@@ -163,6 +165,31 @@ test("usage change: less is better, tiny changes are the same", () => {
   assert.equal(usageChange(10.2, 10), "same");
   assert.equal(usageChange(0, 0), "same");
   assert.equal(usageChange(1, 0), "worse");
+  assert.equal(usageChange(10.8, 10, 0.1), "same"); // +8% is under a 10% threshold
+});
+
+test("level change: median of last 7 days vs the 28 before", () => {
+  const flat = Array(35).fill(10);
+  assert.equal(levelChange(flat).direction, "same");
+  const oneHeavyDay = [...Array(34).fill(10), 40];
+  assert.equal(levelChange(oneHeavyDay).direction, "same"); // median ignores a single heavy day
+  const stepUp = [...Array(28).fill(10), ...Array(7).fill(12)];
+  assert.deepEqual(levelChange(stepUp), { recent: 12, baseline: 10, baselineDays: 28, fraction: 0.2, direction: "worse" });
+  const stepDown = [...Array(28).fill(10), ...Array(7).fill(8)];
+  assert.equal(levelChange(stepDown).direction, "better");
+  const fromZero = [...Array(28).fill(0), ...Array(7).fill(5)];
+  assert.equal(levelChange(fromZero).direction, "worse");
+  assert.equal(levelChange(fromZero).fraction, null);
+  const tooShort = Array(13).fill(10); // 7 recent + 6 baseline days
+  assert.equal(levelChange(tooShort).direction, null);
+  assert.equal(levelChange(Array(14).fill(10)).direction, "same");
+});
+
+test("days before the first entry are not counted as use-free", () => {
+  const byDay = { "2026-10-10": [{}], "2026-10-12": [{}] };
+  assert.deepEqual(keysSinceFirstEntry(byDay, "2026-10-01", "2026-10-12"), dayRange("2026-10-10", "2026-10-12"));
+  assert.deepEqual(keysSinceFirstEntry(byDay, "2026-10-11", "2026-10-12"), ["2026-10-11", "2026-10-12"]);
+  assert.deepEqual(keysSinceFirstEntry({}, "2026-10-01", "2026-10-12"), []);
 });
 
 const totals = (plan) => {

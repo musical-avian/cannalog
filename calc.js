@@ -13,6 +13,11 @@ export const SOURCES = {
     title: "Cohen 1988, Statistical Power Analysis (r: 0.1 small, 0.3 medium, 0.5 large)",
     url: "https://doi.org/10.4324/9780203771587",
   },
+  libraTrend: { title: "Libra: What is a trend? (time-aware smoothing, τ 7 days)", url: "https://libra-app.eu/support/trend/" },
+  libraForecast: {
+    title: "Libra: How forecasts are calculated (regression over trend, 7-day window)",
+    url: "https://libra-app.eu/support/forecast/",
+  },
 };
 
 // THCA → THC loses CO2. Mass factor = 314.5 / 358.5. CBDA → CBD has the same masses.
@@ -267,8 +272,16 @@ export function goodness(score, higherIsBetter) {
 // Trend smoothing: each day moves the trend 10% toward that day's value (Hacker's Diet, same idea as Libra).
 // Evidence: method choice, not a clinical number (docs/limits.md).
 export const TREND_SMOOTHING = 0.1;
-// Days used for the weekly rate. 4 weeks: long enough to ignore one odd week.
+// Days used for the weekly rate (info only since D29). 4 weeks: long enough to ignore one odd week.
 export const RATE_WINDOW_DAYS = 28;
+// Level check (main creep signal, D29): typical day of the last week vs the 4 weeks before.
+// Median, so one heavy day doesn't flag "rising". 7 days = fast enough to notice before getting used to a new dose.
+export const LEVEL_RECENT_DAYS = 7;
+export const LEVEL_BASELINE_DAYS = 28;
+// Under 10% difference counts as "same" (assumed; simulated trade-off in docs/limits.md).
+export const LEVEL_CHANGE_FRACTION = 0.1;
+// Below one week of baseline the comparison would be a coin toss; shown as "needs more days" instead.
+export const LEVEL_MIN_BASELINE_DAYS = 7;
 // A weekly change under 5% of the average counts as "stable" (assumed, docs/limits.md).
 export const STABLE_RATE_FRACTION = 0.05;
 
@@ -353,11 +366,42 @@ const MIN_MG_CHANGE = 0.1;
 
 /**
  * Compare usage now vs before (e.g. mean mg/day this week vs last). Less is better.
- * Changes under STABLE_RATE_FRACTION of the earlier value count as "same".
+ * Changes under `fraction` of the earlier value count as "same".
  */
-export function usageChange(now, before) {
-  const smallestRealChange = Math.max(STABLE_RATE_FRACTION * before, MIN_MG_CHANGE);
+export function usageChange(now, before, fraction = STABLE_RATE_FRACTION) {
+  const smallestRealChange = Math.max(fraction * before, MIN_MG_CHANGE);
   return trend(now, before, false, smallestRealChange);
+}
+
+/**
+ * Day keys from the first logged day (or `firstKey`, whichever is later) to `lastKey`.
+ * Days before the first entry are unknown, not use-free: counting them as 0 mg would fake a rise.
+ */
+export function keysSinceFirstEntry(byDay, firstKey, lastKey) {
+  const firstEntryKey = Object.keys(byDay).sort()[0];
+  if (firstEntryKey === undefined || firstEntryKey > lastKey) return [];
+  const start = firstEntryKey > firstKey ? firstEntryKey : firstKey;
+  return dayRange(start, lastKey);
+}
+
+/**
+ * Is the typical (median) day of the last LEVEL_RECENT_DAYS higher than in the LEVEL_BASELINE_DAYS before?
+ * `dailyValues`: THC mg per day, oldest first, starting no earlier than the first logged day.
+ * { recent, baseline, baselineDays, fraction, direction: "worse" | "better" | "same" | null }
+ * direction null = fewer than LEVEL_MIN_BASELINE_DAYS of baseline. fraction null = baseline 0.
+ */
+export function levelChange(dailyValues) {
+  const recentValues = dailyValues.slice(-LEVEL_RECENT_DAYS);
+  const baselineValues = dailyValues.slice(0, -LEVEL_RECENT_DAYS).slice(-LEVEL_BASELINE_DAYS);
+  const recent = median(recentValues);
+  const baselineDays = baselineValues.length;
+  if (recentValues.length < LEVEL_RECENT_DAYS || baselineDays < LEVEL_MIN_BASELINE_DAYS) {
+    return { recent, baseline: null, baselineDays, fraction: null, direction: null };
+  }
+  const baseline = median(baselineValues);
+  const fraction = baseline > 0 ? (recent - baseline) / baseline : null;
+  const direction = usageChange(recent, baseline, LEVEL_CHANGE_FRACTION);
+  return { recent, baseline, baselineDays, fraction, direction };
 }
 
 // ---------- dose calculator ----------

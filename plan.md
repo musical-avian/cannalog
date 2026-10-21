@@ -12,7 +12,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - localStorage ≈ 5 MB; an entry ≈ 400 B → ~12k entries. Enough for years at 10/day.
 - Sandbox Chromium needs `locale: "en-US"` (as in Halflives).
 - Libra (fetched via a one-off GH Actions run, 2026-10-21; https://libra-app.eu/support/trend/, /support/forecast/): trend `power = 1 − e^(−Δt/τ)`, τ = 7 days default (= α 0.133 for daily data; ours 0.1 = τ 9.5 d); rate = linear regression over **trend** values in a 7-day window; no "stable" threshold documented. Time-aware Δt is a no-op for us (daily series, Δt always 1).
-- Eval (simulated 90 days, 10 mg ± 3): false "up/down" alarms on flat use — ours (raw, 28 d) 31%, Libra (trend, 7 d) 62%, trend over 28 d 6%. One 40 mg day yesterday → rate 1.4 / 4.6 / 0.3. Trend-28 d lags a sudden step (1.0 vs 2.8 after 7 days). Script: see log.
+- Eval (simulated 90 days, 10 mg ± 3): false "up/down" alarms on flat use — ours (raw, 28 d) 31%, Libra (trend, 7 d) 62%, trend over 28 d 6%. One 40 mg day yesterday → rate 1.4 / 4.6 / 0.3. Trend-28 d lags a sudden step (1.0 vs 2.8 after 7 days). Window sweep (no days off): +50% dose shows in 4–5 days with any method; small creep is limited by day-to-day noise, not window length.
 
 ## Decisions
 | # | Decision | Why |
@@ -44,6 +44,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D25 | Vaporizer load + sips, mg split evenly (`expandLoads`); full load always counts, Empty = 1 tap | one fill used all day; "how much was used" is unknowable for flower, consistent upper bound beats a guess |
 | D26 | Context tags (beneficial/neutral) with optional value on any entry | meds/habits next to use, no separate med schedule (YAGNI) |
 | D27 | Correlations: same-day + next-day Pearson r (≥ 10 days), use-free vs use days, tag with/without (≥ 3 days); Cohen words | readable for patient and doctor; minimums avoid noise |
+| D29 | Creep signal = median of last 7 days vs 28 days before, ±10% (`levelChange`); 28-day slope kept as muted info; days before first entry never count as 0 mg | user wants to notice a new dose within ~a week, before getting used to it; slope flagged one heavy day as "rising" 99% of the time; simulation in docs/limits.md |
 | D28 | Doctor report via print view (no PDF library), German, 1 A4 page, b/w SVG; verified 1 page with Playwright page.pdf | no dependency, vector, prints on any printer |
 
 ## Tasks
@@ -58,13 +59,14 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | Optional encrypted backup (WebCrypto) | idea | — |
 | AVB tracking (kept amount, stash, user-entered strength) | idea — no sourced potency for AVB | — |
 | Confirm backup buttons on a real Android phone | done: download works, share blocked by browser (leave as is) | user |
-| Eval Libra trend/rate vs calc.js | done (Facts); rate change pending user decision | claude |
+| Eval Libra trend/rate vs calc.js | done (Facts); led to D29 | claude |
 | Retcon LICENSE into all commits (filter-branch + force push) | done | claude |
 
 ## Open questions
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-21 claude: D29 level check (median 7 d vs 28 d, ±10%) drives creep arrow in app + report; slope muted info; slope/level skip days before first entry. 40 tests, report 1 page (normal, 3-day, stress).
 - 2026-10-21 claude: Libra formulas fetched via temporary GH workflow (removed), compared by simulation. No code change yet.
 - 2026-10-21 claude: report: visual summary block at top (sparkline, |r| bars, strongest factors), side-by-side factor/amount tables, 1 page verified on worst case. 38 tests.
 - 2026-10-21 claude: use-free mean only from ≥ 3 days; r of logged amounts (sleep h, medication mg) with THC + symptoms, also for daily tags. 37 tests.

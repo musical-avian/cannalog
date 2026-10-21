@@ -5,9 +5,15 @@
 import {
   addDays,
   dailySeries,
+  dailyThcSeries,
   dayRange,
   dayStart,
   groupByDay,
+  keysSinceFirstEntry,
+  LEVEL_BASELINE_DAYS,
+  LEVEL_MIN_BASELINE_DAYS,
+  LEVEL_RECENT_DAYS,
+  levelChange,
   MIN_PAIRED_DAYS,
   mean,
   median,
@@ -249,19 +255,28 @@ function rBar(result, symptom) {
   return `<svg viewBox="0 0 ${R_BAR_WIDTH} 3.4" width="${R_BAR_WIDTH}mm" height="3.4mm"><line x1="0" x2="${R_BAR_WIDTH}" y1="1.7" y2="1.7" stroke="#bbb" stroke-width="0.2"/>${ticks}${bar}</svg>`;
 }
 
+/** "Letzte 7 T (Median): ▲ steigend 12 vs 10 mg (28 T davor), +20 %" — the main creep signal (calc.js levelChange). */
+function levelText(level) {
+  const label = `Letzte ${LEVEL_RECENT_DAYS} T (Median)`;
+  if (level.direction === null) return `${label}: ${num(level.recent)} mg, Vergleich ab ${LEVEL_MIN_BASELINE_DAYS} T Vorlauf`;
+  const word = { worse: "steigend", better: "fallend", same: "stabil" }[level.direction];
+  let percent = "";
+  if (level.fraction !== null) percent = `, ${level.fraction > 0 ? "+" : ""}${Math.round(level.fraction * 100)} %`;
+  return `${label}: <b>${TREND_ARROW[level.direction]} ${word} ${num(level.recent)}</b> vs ${num(level.baseline)} mg (${level.baselineDays} T davor)${percent}`;
+}
+
 /** Top block: long-term course + key numbers (left), how each symptom goes with THC + strongest factor (right). */
-function summaryBlock({ shortDays, longDays, weeks, longCorrelations, factorHighlight }) {
+function summaryBlock({ shortDays, longDays, weeks, level, rate, longCorrelations, factorHighlight }) {
   const shortThc = shortDays.map((d) => d.thc);
   const longThc = longDays.map((d) => d.thc);
-  const rate = weeklyRate(shortThc);
-  const rateWord = { worse: "steigend", better: "fallend", same: "stabil" }[rate.direction];
+  const slopeText = `Steigung ${rate.perWeek > 0 ? "+" : ""}${num(rate.perWeek)} mg/Tag pro Wo`;
   const freeShort = shortDays.filter((d) => d.thc === 0).length;
   const freeLong = longDays.filter((d) => d.thc === 0).length;
   const numbers = [
     `<b>Ø ${num(mean(shortThc))}</b> mg THC/Tag (4 Wo) · ${num(mean(longThc))} (6 Mon)`,
     `Median ${num(median(shortThc))} (4 Wo) · ${num(median(longThc))} (6 Mon)`,
     `Konsumfrei: <b>${freeShort}/${shortDays.length}</b> Tage (4 Wo) · ${freeLong}/${longDays.length} (6 Mon)`,
-    `Trend 4 Wo: <b>${TREND_ARROW[rate.direction]} ${rateWord}</b>, ${rate.perWeek > 0 ? "+" : ""}${num(rate.perWeek)} mg/Tag pro Woche`,
+    `${levelText(level)} · ${slopeText}`,
     `Ø CBD ${num(mean(shortDays.map((d) => d.cbd)))} mg/Tag (4 Wo)`,
   ];
   const rows = longCorrelations.map((row) => {
@@ -449,12 +464,15 @@ export function buildReport({ entries, settings, mode, todayKey, appVersion, sou
     symptoms,
   ).filter((row) => row.n >= MIN_PAIRED_DAYS && row.thc.reason !== "no variation x");
   const factorHighlight = strongestFactor(tagComparisons(longDays, allTags, symptoms).rows, amountRows);
+  const levelKeys = keysSinceFirstEntry(byDay, addDays(todayKey, -(LEVEL_RECENT_DAYS + LEVEL_BASELINE_DAYS - 1)), todayKey);
+  const level = levelChange(dailyThcSeries(levelKeys, byDay, mode));
+  const rate = weeklyRate(dailyThcSeries(keysSinceFirstEntry(byDay, shortKeys[0], todayKey), byDay, mode));
   return `<div class="report">
     <header>
       <h1>Cannabis-Tagebuch – Bericht</h1>
       <div>Zeitraum ${dateText(longKeys[0])} – ${dateText(todayKey)} · erstellt am ${dateText(todayKey)} · Einheit: mg THC${mode === "raw" ? " (Etikett)" : ""} · Selbstauskunft</div>
     </header>
-    ${summaryBlock({ shortDays, longDays, weeks, longCorrelations: useCorrelations(longDays, symptoms), factorHighlight })}
+    ${summaryBlock({ shortDays, longDays, weeks, level, rate, longCorrelations: useCorrelations(longDays, symptoms), factorHighlight })}
     <h2>Letzte 4 Wochen (Tageswerte)</h2>
     ${columnChart({ columns: shortColumns, symptoms, tagRows, thcLabel: "mg THC" })}
     ${legend(symptoms)}

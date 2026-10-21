@@ -41,6 +41,8 @@ test("report: German, one SVG per view, tag strips, correlation table", () => {
   assert.match(html, /Selbstauskunft/);
   assert.match(html, /class="summary"/); // visual summary at the top
   assert.match(html, /Mehr THC am Tag geht einher mit/);
+  // last 7 days: 4 of 7 use days → median 20 mg; 28 days before: half → median 10 mg
+  assert.match(html, /Letzte 7 T \(Median\): <b>▲ steigend 20,0<\/b> vs 10,0 mg \(28 T davor\), \+100 %/);
   assert.equal((html.match(/<svg class="chart"/g) ?? []).length, 2);
   assert.match(html, />Bewegung</); // exercise strip, German name
   assert.match(html, /Schmerz/);

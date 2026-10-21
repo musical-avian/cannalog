@@ -17,6 +17,11 @@ import {
   groupByDay,
   isDose,
   isSip,
+  keysSinceFirstEntry,
+  LEVEL_BASELINE_DAYS,
+  LEVEL_MIN_BASELINE_DAYS,
+  LEVEL_RECENT_DAYS,
+  levelChange,
   MIN_PAIRED_DAYS,
   mean,
   median,
@@ -68,7 +73,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-21.4";
+const APP_VERSION = "2026-10-21.5";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -541,15 +546,34 @@ function usageCard(byDay) {
   const prev7 = last28.slice(-14, -7);
   const freeLast7 = last7.filter((mg) => mg === 0).length;
   const freePrev7 = prev7.filter((mg) => mg === 0).length;
-  const rate = weeklyRate(last28);
+  const rateKeys = keysSinceFirstEntry(byDay, addDays(today, -(RATE_WINDOW_DAYS - 1)), today);
+  const rate = weeklyRate(dailyThcSeries(rateKeys, byDay, chartMode()));
   const sign = rate.perWeek > 0 ? "+" : "";
-  const rateWords = { worse: "rising", better: "falling", same: "stable" };
   return `<div class="card">
-    <div class="row spread"><span>THC trend (4 weeks)</span><span class="${rate.direction}"><b>${rateWords[rate.direction]}</b> ${sign}${round1(rate.perWeek)} mg/day per week</span></div>
+    ${levelRow(byDay, today)}
+    <div class="row spread muted"><span>Slope (4 weeks)</span><span>${sign}${round1(rate.perWeek)} mg/day per week</span></div>
     <div class="row spread"><span>Last 7 days, mean</span><span><b>${round1(mean(last7))}</b> mg/day ${usageSpan(mean(last7), mean(prev7))} <span class="muted">(prev ${round1(mean(prev7))})</span></span></div>
     <div class="row spread"><span>Use-free days</span><span><b>${freeLast7}</b> ${trendSpan(freeLast7, freePrev7, true, 1)} <span class="muted">(prev ${freePrev7})</span></span></div>
     ${watchLast7VsPrev7(today)}
   </div>`;
+}
+
+/** Main creep signal: typical (median) day of the last week vs the 4 weeks before. */
+function levelRow(byDay, today) {
+  const firstKey = addDays(today, -(LEVEL_RECENT_DAYS + LEVEL_BASELINE_DAYS - 1));
+  const keys = keysSinceFirstEntry(byDay, firstKey, today);
+  const level = levelChange(dailyThcSeries(keys, byDay, chartMode()));
+  const label = `<span>Typical day, last ${LEVEL_RECENT_DAYS} days</span>`;
+  if (level.direction === null) {
+    const missing = LEVEL_RECENT_DAYS + LEVEL_MIN_BASELINE_DAYS - keys.length;
+    return `<div class="row spread">${label}<span class="muted">needs ${missing} more days of log</span></div>`;
+  }
+  const words = { worse: "rising", better: "falling", same: "stable" };
+  let percent = "";
+  if (level.fraction !== null) percent = ` ${level.fraction > 0 ? "+" : ""}${Math.round(level.fraction * 100)}%`;
+  const arrow = directionSpan(level.direction, level.recent > level.baseline);
+  return `<div class="row spread">${label}<span><b>${round1(level.recent)}</b> mg ${arrow} <span class="${level.direction}">${words[level.direction]}${percent}</span>
+    <span class="muted">(vs ${round1(level.baseline)}, ${level.baselineDays} days before)</span></span></div>`;
 }
 
 /** Watch tags in the last 7 days vs the 7 before. Empty if none were logged in either. */
