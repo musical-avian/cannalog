@@ -11,6 +11,8 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - PubChem CIDs (16078 THC, 98523 THCA) written from memory; pubchem.ncbi.nlm.nih.gov was blocked in the build sandbox → re-check once.
 - localStorage ≈ 5 MB; an entry ≈ 400 B → ~12k entries. Enough for years at 10/day.
 - Sandbox Chromium needs `locale: "en-US"` (as in Halflives).
+- Libra (fetched via a one-off GH Actions run, 2026-10-21; https://libra-app.eu/support/trend/, /support/forecast/): trend `power = 1 − e^(−Δt/τ)`, τ = 7 days default (= α 0.133 for daily data; ours 0.1 = τ 9.5 d); rate = linear regression over **trend** values in a 7-day window; no "stable" threshold documented. Time-aware Δt is a no-op for us (daily series, Δt always 1).
+- Eval (simulated 90 days, 10 mg ± 3): false "up/down" alarms on flat use — ours (raw, 28 d) 31%, Libra (trend, 7 d) 62%, trend over 28 d 6%. One 40 mg day yesterday → rate 1.4 / 4.6 / 0.3. Trend-28 d lags a sudden step (1.0 vs 2.8 after 7 days). Script: see log.
 
 ## Decisions
 | # | Decision | Why |
@@ -27,7 +29,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D10 | Pages deploys from branch, CI only lints/tests | Actions deploy was blocked by environment rule; branch deploy needs no workflow |
 | D11 | Work on feature branch, fast-forward `main` after each green change | user choice; `main` is what Pages serves |
 | D12 | Theme auto/light/dark in settings; dark tokens duplicated (media + manual), test keeps them equal | pure CSS cannot share one block between a media query and a selector |
-| D13 | Creep = EMA trend (α 0.1, Hacker's Diet/Libra) + 28-day regression rate + mean/median + use-free days | robust to single heavy days; libra-app.eu unreachable from sandbox, method from its origin |
+| D13 | Creep = EMA trend (α 0.1, Hacker's Diet/Libra) + 28-day regression rate + mean/median + use-free days | robust to single heavy days; Libra formulas checked 2026-10-21 (see Facts) |
 | D14 | Use-free days count as 0 mg in consumption math | a day off is real data; skipping it would hide reductions |
 | D15 | Arrows show direction, color shows good/bad | one rule for scores and usage |
 | D16 | Mobile sizing: 16px base, 44px tap targets, score grid 6×2 | first "too small" report was desktop mode; 18px/48px then felt too big |
@@ -55,13 +57,15 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | Re-verify PubChem CIDs | open | — |
 | Optional encrypted backup (WebCrypto) | idea | — |
 | AVB tracking (kept amount, stash, user-entered strength) | idea — no sourced potency for AVB | — |
-| Confirm backup buttons on a real Android phone | open | user |
+| Confirm backup buttons on a real Android phone | done: download works, share blocked by browser (leave as is) | user |
+| Eval Libra trend/rate vs calc.js | done (Facts); rate change pending user decision | claude |
 | Retcon LICENSE into all commits (filter-branch + force push) | done | claude |
 
 ## Open questions
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-21 claude: Libra formulas fetched via temporary GH workflow (removed), compared by simulation. No code change yet.
 - 2026-10-21 claude: report: visual summary block at top (sparkline, |r| bars, strongest factors), side-by-side factor/amount tables, 1 page verified on worst case. 38 tests.
 - 2026-10-21 claude: use-free mean only from ≥ 3 days; r of logged amounts (sleep h, medication mg) with THC + symptoms, also for daily tags. 37 tests.
 - 2026-10-21 claude: correlations never silently hidden: "no variation" label instead of "too few"; every-day/rare tags named in report + app. 36 tests.
