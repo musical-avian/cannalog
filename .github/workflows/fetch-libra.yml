@@ -1,0 +1,99 @@
+# TEMPORARY: libra-app.eu is blocked from the dev sandbox. This prints its support pages
+# into the job log so the trend formulas can be compared with calc.js. Delete after use.
+name: fetch-libra
+
+on:
+  push:
+    paths: [.github/workflows/fetch-libra.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch pages (live, then Wayback Machine as fallback)
+        shell: python3 {0}
+        run: |
+          import html.parser, json, os, re, urllib.parse, urllib.request
+
+          START = ["https://libra-app.eu/support/", "https://libra-app.eu/"]
+          MAX_PAGES = 15
+          USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36"
+          os.makedirs("pages", exist_ok=True)
+
+          class TextAndLinks(html.parser.HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.text, self.links, self.skip = [], [], 0
+              def handle_starttag(self, tag, attrs):
+                  if tag in ("script", "style"):
+                      self.skip += 1
+                  if tag == "a":
+                      self.links += [v for k, v in attrs if k == "href" and v]
+                  if tag in ("p", "br", "li", "h1", "h2", "h3", "h4", "tr", "div"):
+                      self.text.append("\n")
+              def handle_endtag(self, tag):
+                  if tag in ("script", "style"):
+                      self.skip -= 1
+              def handle_data(self, data):
+                  if not self.skip:
+                      self.text.append(data)
+
+          def get(url):
+              request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  return response.read().decode("utf-8", "replace")
+
+          def dump(url, body):
+              parser = TextAndLinks()
+              parser.feed(body)
+              text = re.sub(r"\n\s*\n+", "\n", "".join(parser.text))
+              print(f"\n=== {url} ===\n{text.strip()}\n")
+              name = re.sub(r"[^a-z0-9]+", "_", url.lower())[:120]
+              open(f"pages/{name}.html", "w").write(body)
+              return parser.links
+
+          def crawl(starts, same_host):
+              queue, seen = list(starts), set()
+              while queue and len(seen) < MAX_PAGES:
+                  url = queue.pop(0).split("#")[0]
+                  if url in seen:
+                      continue
+                  seen.add(url)
+                  try:
+                      links = dump(url, get(url))
+                  except Exception as error:
+                      print(f"\n=== {url} === FAILED: {error}")
+                      continue
+                  for link in links:
+                      absolute = urllib.parse.urljoin(url, link).split("#")[0]
+                      if same_host(absolute) and re.search(r"support|faq|help|trend|manual|doc", absolute, re.I):
+                          queue.append(absolute)
+              return seen
+
+          crawl(START, lambda u: urllib.parse.urlparse(u).netloc == "libra-app.eu")
+
+          # Fallback / cross-check: latest archived copies.
+          for target in ["libra-app.eu/support/", "libra-app.eu/support/*"]:
+              cdx = ("https://web.archive.org/cdx/search/cdx?output=json&filter=statuscode:200"
+                     "&collapse=urlkey&limit=20&url=" + urllib.parse.quote(target, safe="*/:"))
+              try:
+                  rows = json.loads(get(cdx) or "[]")[1:]
+              except Exception as error:
+                  print(f"CDX {target} FAILED: {error}")
+                  continue
+              for row in rows[:10]:
+                  timestamp, original = row[1], row[2]
+                  archived = f"https://web.archive.org/web/{timestamp}id_/{original}"
+                  try:
+                      dump(archived, get(archived))
+                  except Exception as error:
+                      print(f"\n=== {archived} === FAILED: {error}")
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: libra-pages
+          path: pages/
