@@ -110,6 +110,24 @@ test("no-dose entry: valid without product, needs a watch tag or note; old data 
   assert.throws(() => validate(s), /entry c1: entry without dose needs a tag, a score or a note/);
 });
 
+test("after ratings: optional, checked, in CSV", () => {
+  const s = sample();
+  s.entries[0].after = { t: "2026-10-18T11:30:00.000Z", scores: { mood: 9 } };
+  assert.doesNotThrow(() => validate(s));
+  const lines = toCsv(s).split("\n");
+  assert.match(lines[0], /after_time,after_mood/);
+  assert.match(lines[1], /2026-10-18T11:30:00.000Z,9/);
+  s.entries[0].after.scores.mood = 11;
+  assert.throws(() => validate(s), /entry e1: after score mood = 11 must be 0–10/);
+  s.entries[0].after = { t: "2026-10-18T09:00:00.000Z", scores: {} };
+  assert.throws(() => validate(s), /entry e1: after time 2026-10-18T09:00:00.000Z is before the dose/);
+  s.entries[0].after = { t: "later", scores: {} };
+  assert.throws(() => validate(s), /entry e1: after time "later" is not a date/);
+  const noDose = { id: "n1", t: "2026-10-18T12:00:00.000Z", noDose: true, note: "x", scores: {}, effects: [] };
+  noDose.after = { t: "2026-10-18T13:00:00.000Z", scores: {} };
+  assert.throws(() => validate({ ...sample(), entries: [noDose] }), /entry n1: "after" ratings need a dose/);
+});
+
 test("anxiety: added once to older settings, stays deleted if removed", () => {
   const storage = memoryStorage();
   const old = sample();

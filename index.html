@@ -188,7 +188,7 @@
       <form id="entry-form" method="dialog">
         <div class="row spread"><h2 id="entry-title">New entry</h2><button type="submit" value="cancel" formnovalidate>✕</button></div>
         <p class="muted" id="sip-info" hidden></p>
-        <label class="row" id="no-dose-row"><input name="noDose" type="checkbox" /> No dose (craving / event only)</label>
+        <label class="row" id="no-dose-row"><input name="noDose" type="checkbox" /> No dose (check-in, craving, event)</label>
         <div id="dose-fields">
           <label class="field"><span>Strain / product</span><select name="strainId"></select></label>
           <div class="row" style="flex-wrap: nowrap">
@@ -200,7 +200,12 @@
         </div>
         <label class="field"><span>Time</span><input name="time" type="datetime-local" required /></label>
         <p class="muted" id="entry-preview"></p>
+        <h2>How you feel – before / at dose</h2>
         <div id="entry-scores"></div>
+        <div id="entry-after">
+          <h2 id="entry-after-title">How you feel after (optional)</h2>
+          <div id="entry-after-scores"></div>
+        </div>
         <h2>Effects</h2>
         <div class="row" id="entry-effects"></div>
         <h2>Context <span class="muted">(meds, habits)</span></h2>

@@ -27,6 +27,7 @@ test("report: German, one SVG per view, tag strips, correlation table", () => {
       });
     else entries.push({ id: `n${i}`, t: noon, noDose: true, note: "", scores: { pain: 7 }, effects: [], context });
   }
+  entries[0].after = { t: new Date(Date.parse(entries[0].t) + 3600 * 1000).toISOString(), scores: { pain: 1 } };
   const html = buildReport({
     entries: expandLoads(entries),
     settings: defaultSettings(),
@@ -41,6 +42,7 @@ test("report: German, one SVG per view, tag strips, correlation table", () => {
   assert.match(html, /Selbstauskunft/);
   assert.match(html, /class="summary"/); // visual summary at the top
   assert.match(html, /Mehr THC am Tag geht einher mit/);
+  assert.match(html, /nach Dosis 3,0→<b>1,0<\/b> \(n 1\)/); // before → after a dose
   // last 7 days: 4 of 7 use days → median 20 mg; 28 days before: half → median 10 mg
   assert.match(html, /Letzte 7 T \(Median\): <b>▲ steigend 20,0<\/b> vs 10,0 mg \(28 T davor\), \+100 %/);
   assert.equal((html.match(/<svg class="chart"/g) ?? []).length, 2);

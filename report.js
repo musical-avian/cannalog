@@ -8,6 +8,8 @@ import {
   dailyThcSeries,
   dayRange,
   dayStart,
+  doseRelief,
+  entriesBetween,
   groupByDay,
   keysSinceFirstEntry,
   LEVEL_BASELINE_DAYS,
@@ -266,7 +268,13 @@ function levelText(level) {
 }
 
 /** Top block: long-term course + key numbers (left), how each symptom goes with THC + strongest factor (right). */
-function summaryBlock({ shortDays, longDays, weeks, level, rate, longCorrelations, factorHighlight }) {
+/** "nach Dosis 7,0→3,8 (n 14)" — before → after a dose (D30), or "–" without pairs. */
+function reliefCell(relief) {
+  if (!relief || relief.n === 0) return "nach Dosis –";
+  return `nach Dosis ${num(relief.before)}→<b>${num(relief.after)}</b> (n ${relief.n})`;
+}
+
+function summaryBlock({ shortDays, longDays, weeks, level, rate, longCorrelations, relief, factorHighlight }) {
   const shortThc = shortDays.map((d) => d.thc);
   const longThc = longDays.map((d) => d.thc);
   const slopeText = `Steigung ${rate.perWeek > 0 ? "+" : ""}${num(rate.perWeek)} mg/Tag pro Wo`;
@@ -281,7 +289,8 @@ function summaryBlock({ shortDays, longDays, weeks, level, rate, longCorrelation
   ];
   const rows = longCorrelations.map((row) => {
     const words = verdict(row.sameDay, row.symptom);
-    return `<tr><td>${esc(german(row.symptom.name))}</td><td>${rBar(row.sameDay, row.symptom)}</td><td>${words}</td></tr>`;
+    const reliefRow = relief.find((r) => r.symptom.name === row.symptom.name);
+    return `<tr><td>${esc(german(row.symptom.name))}</td><td>${rBar(row.sameDay, row.symptom)}</td><td>${words}</td><td>${reliefCell(reliefRow)}</td></tr>`;
   });
   return `<svg width="0" height="0" style="position:absolute"><defs><pattern id="hatch" width="1.2" height="1.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="0.5" height="1.2" fill="#000"/></pattern></defs></svg>
   <div class="summary">
@@ -472,7 +481,16 @@ export function buildReport({ entries, settings, mode, todayKey, appVersion, sou
       <h1>Cannabis-Tagebuch – Bericht</h1>
       <div>Zeitraum ${dateText(longKeys[0])} – ${dateText(todayKey)} · erstellt am ${dateText(todayKey)} · Einheit: mg THC${mode === "raw" ? " (Etikett)" : ""} · Selbstauskunft</div>
     </header>
-    ${summaryBlock({ shortDays, longDays, weeks, level, rate, longCorrelations: useCorrelations(longDays, symptoms), factorHighlight })}
+    ${summaryBlock({
+      shortDays,
+      longDays,
+      weeks,
+      level,
+      rate,
+      longCorrelations: useCorrelations(longDays, symptoms),
+      relief: doseRelief(entriesBetween(entries, longKeys[0], todayKey), symptoms),
+      factorHighlight,
+    })}
     <h2>Letzte 4 Wochen (Tageswerte)</h2>
     ${columnChart({ columns: shortColumns, symptoms, tagRows, thcLabel: "mg THC" })}
     ${legend(symptoms)}

@@ -6,6 +6,7 @@ import {
   DECARB_FACTOR,
   dailyThcSeries,
   dayRange,
+  doseRelief,
   expandLoads,
   goodness,
   groupByDay,
@@ -15,6 +16,7 @@ import {
   levelChange,
   mean,
   median,
+  needsAfterRating,
   pearson,
   planForMg,
   productMg,
@@ -183,6 +185,39 @@ test("level change: median of last 7 days vs the 28 before", () => {
   const tooShort = Array(13).fill(10); // 7 recent + 6 baseline days
   assert.equal(levelChange(tooShort).direction, null);
   assert.equal(levelChange(Array(14).fill(10)).direction, "same");
+});
+
+test("before → after a dose: relief per symptom, day mean counts both, banner window", () => {
+  const pain = { name: "pain", higherIsBetter: false };
+  const mood = { name: "mood", higherIsBetter: true };
+  const dose = (id, before, after, minutes) =>
+    entry(flower, 100, {
+      id,
+      scores: before,
+      after: after && { t: new Date(Date.parse(at(2026, 10, 18)) + minutes * 60000).toISOString(), scores: after },
+    });
+  const entries = [
+    dose("a", { pain: 8, mood: 3 }, { pain: 4 }, 60),
+    dose("b", { pain: 6 }, { pain: 4, mood: 6 }, 120), // mood only after: no pair
+    dose("c", { pain: 7 }, {}, 30), // skipped
+    dose("d", { pain: 9 }, null, 0), // never rated after
+  ];
+  const [painRow, moodRow] = doseRelief(entries, [pain, mood]);
+  assert.deepEqual(
+    { n: painRow.n, before: painRow.before, after: painRow.after, change: painRow.change, minutes: painRow.medianMinutes },
+    { n: 2, before: 7, after: 4, change: -3, minutes: 90 },
+  );
+  assert.equal(painRow.direction, "better"); // less pain
+  assert.equal(moodRow.n, 0);
+  assert.equal(moodRow.direction, "none");
+  assert.equal(summarize([entries[0]], "raw").scores.pain, 6); // (8 + 4) / 2
+
+  const doseAt = (minutesAgo) => entry(flower, 100, { t: new Date(Date.now() - minutesAgo * 60000).toISOString() });
+  const now = new Date();
+  assert.equal(needsAfterRating(doseAt(10), now), false); // too early
+  assert.equal(needsAfterRating(doseAt(60), now), true);
+  assert.equal(needsAfterRating(doseAt(7 * 60), now), false); // too late
+  assert.equal(needsAfterRating({ ...doseAt(60), after: { t: now.toISOString(), scores: {} } }, now), false); // skipped
 });
 
 test("days before the first entry are not counted as use-free", () => {

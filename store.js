@@ -168,6 +168,16 @@ export function validateEntry(entry) {
     const valueOk = item?.value == null || (isNumber(item.value) && item.value >= 0);
     check(isText(item?.tag) && valueOk, `${label}: bad context ${JSON.stringify(item)} (needs tag and a value ≥ 0 or none)`);
   }
+  // after: optional { t, scores } = how it felt later (D30). Empty scores = prompt skipped.
+  if (entry.after !== undefined) {
+    check(isDose(entry), `${label}: "after" ratings need a dose (entry without dose has none)`);
+    const afterTime = entry.after?.t;
+    check(isText(afterTime) && !Number.isNaN(Date.parse(afterTime)), `${label}: after time "${afterTime}" is not a date`);
+    check(Date.parse(afterTime) >= Date.parse(entry.t), `${label}: after time ${afterTime} is before the dose (${entry.t})`);
+    for (const [name, value] of Object.entries(entry.after.scores ?? {})) {
+      check(isNumber(value) && value >= 0 && value <= 10, `${label}: after score ${name} = ${value} must be 0–10`);
+    }
+  }
   if (!isDose(entry)) {
     const hasContent = watch.length > 0 || context.length > 0 || Object.keys(entry.scores ?? {}).length > 0 || entry.note.trim() !== "";
     check(hasContent, `${label}: entry without dose needs a tag, a score or a note`);
@@ -286,6 +296,8 @@ export function toCsv(state) {
     `cbd_mg_${mode}_low`,
     `cbd_mg_${mode}_high`,
     ...symptomNames,
+    "after_time",
+    ...symptomNames.map((name) => `after_${name}`),
     "good_effects",
     "bad_effects",
     "watch",
@@ -315,6 +327,8 @@ export function toCsv(state) {
         ...active.thc,
         ...active.cbd,
         ...symptomNames.map((name) => entry.scores[name]),
+        entry.after?.t,
+        ...symptomNames.map((name) => entry.after?.scores[name]),
         tags(true),
         tags(false),
         (entry.watch ?? []).join("; "),

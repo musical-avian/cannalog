@@ -187,7 +187,9 @@ export function summarize(entries, mode) {
     summary.cbd[0] += active.cbd[0];
     summary.cbd[1] += active.cbd[1];
 
-    for (const [name, value] of Object.entries(entry.scores)) {
+    // Before and after ratings (D30) are both real ratings of that day.
+    const ratings = [...Object.entries(entry.scores), ...Object.entries(entry.after?.scores ?? {})];
+    for (const [name, value] of ratings) {
       scoreSums[name] = (scoreSums[name] ?? 0) + value;
       scoreCounts[name] = (scoreCounts[name] ?? 0) + 1;
     }
@@ -504,6 +506,49 @@ export function expandLoads(entries) {
     }
   }
   return result;
+}
+
+// ---------- before / after a dose (D30) ----------
+
+// "How do you feel now?" banner window. Inhaled effects peak within ~30 min, oral at 1–4 h and last
+// for hours (Huestis 2007). Window chosen from that, not measured (docs/limits.md).
+export const AFTER_PROMPT_MIN_MINUTES = 30;
+export const AFTER_PROMPT_MAX_HOURS = 6;
+
+const MS_PER_MINUTE = 60000;
+
+/** Does this dose still need an "after" rating, `now` being a Date? Skipped (empty after) counts as done. */
+export function needsAfterRating(entry, now) {
+  if (!isDose(entry) || entry.after) return false;
+  const minutes = (now.getTime() - Date.parse(entry.t)) / MS_PER_MINUTE;
+  return minutes >= AFTER_PROMPT_MIN_MINUTES && minutes <= AFTER_PROMPT_MAX_HOURS * 60;
+}
+
+/**
+ * How symptoms changed from before a dose to the "after" rating, per symptom.
+ * Only entries with both a before and an after score for that symptom count.
+ * [{ symptom, n, before, after, change, medianMinutes, direction }] — n 0 → numbers null, direction "none".
+ */
+export function doseRelief(entries, symptoms) {
+  return symptoms.map((symptom) => {
+    const befores = [];
+    const afters = [];
+    const minutes = [];
+    for (const entry of entries) {
+      const before = entry.scores?.[symptom.name];
+      const after = entry.after?.scores?.[symptom.name];
+      if (before == null || after == null) continue;
+      befores.push(before);
+      afters.push(after);
+      minutes.push((Date.parse(entry.after.t) - Date.parse(entry.t)) / MS_PER_MINUTE);
+    }
+    const n = befores.length;
+    if (n === 0) return { symptom, n, before: null, after: null, change: null, medianMinutes: null, direction: "none" };
+    const before = mean(befores);
+    const after = mean(afters);
+    const direction = trend(after, before, symptom.higherIsBetter);
+    return { symptom, n, before, after, change: after - before, medianMinutes: median(minutes), direction };
+  });
 }
 
 // ---------- correlations: does use go together with symptoms or other factors? ----------

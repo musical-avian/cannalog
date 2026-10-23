@@ -26,9 +26,11 @@ Personal log. Not medical or dosing advice.
 | "urge resisted" = the one watch tag where more is good | design choice |
 | r only from 10 paired days | below that, one odd day swings r a lot; chosen, not a statistical rule |
 | Tag comparison only with ≥ 3 days with and without | same reason; chosen. Only gates the factor table, never THC ↔ symptom r; skipped tags are named (every day / only n×) |
+| After-rating banner 30 min – 6 h | inhaled effects peak within ~30 min, oral at 1–4 h and last for hours ([Huestis 2007](https://doi.org/10.1002/cbdv.200790152)); window chosen from that, not measured |
 | Vaporizer load counts fully | how much a dry-herb vape really extracts is unknown (temperature, draws); a consistent upper bound keeps trends comparable |
 
 ## Not modeled
 - Blood levels over time (see sibling project Halflives).
 - Tolerance, minor cannabinoids, terpenes.
+- Before → after change: self-rated, no comparison with waiting without a dose (no placebo, no natural course). People dose when it's worst, so part of the drop would happen anyway (regression to the mean) → the change looks bigger than the dose effect.
 - Scores are self-rated; trends and correlations are not cause. Many comparisons at once → some "strong" values happen by chance; treat as hints for the doctor talk.

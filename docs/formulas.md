@@ -84,3 +84,10 @@ Input: 1–2 products (tap chips), target THC mg and CBD mg.
 - 6 months weekly: mean THC/day bars + weekly symptom means.
 - Tables: THC ↔ symptoms (use-free vs use days, r 4 W / 6 M, next day, verdict) and factors.
 - Symptoms never rated in 6 months are left out.
+
+## 12. Before → after a dose (`doseRelief`, D30)
+- A dose's `scores` = how it felt **before / at the dose**; `after.scores` = how it felt later, with its own time. Editing never overwrites "before".
+- **Day mean** counts both ratings (both are real ratings of that day).
+- **Change per symptom** (6 months): only doses with a before **and** an after score for that symptom. Mean before → mean after, change = after − before, n, median time to the after rating. Direction via the usual score rule (|Δ| < 0.5 → same; `higherIsBetter`). Shown with any n, never hidden.
+- **Banner** "How do you feel now?": newest dose 30 min – 6 h old without `after`. Rate now → entry dialog at the After grid; Skip → empty `after` (stays dismissed). No notifications.
+- Report: per symptom in the summary, „nach Dosis before→after (n)“.

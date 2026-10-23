@@ -45,6 +45,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 | D26 | Context tags (beneficial/neutral) with optional value on any entry | meds/habits next to use, no separate med schedule (YAGNI) |
 | D27 | Correlations: same-day + next-day Pearson r (≥ 10 days), use-free vs use days, tag with/without (≥ 3 days); Cohen words | readable for patient and doctor; minimums avoid noise |
 | D29 | Creep signal = median of last 7 days vs 28 days before, ±10% (`levelChange`); 28-day slope kept as muted info; days before first entry never count as 0 mg | user wants to notice a new dose within ~a week, before getting used to it; slope flagged one heavy day as "rising" 99% of the time; simulation in docs/limits.md |
+| D30 | Dose entries keep before (`scores`) and after (`after: { t, scores }`) ratings; in-app banner 30 min–6 h asks for after; Skip = empty after | editing used to overwrite "before", losing how much a dose helped; optional field per D19, no migration |
 | D28 | Doctor report via print view (no PDF library), German, 1 A4 page, b/w SVG; verified 1 page with Playwright page.pdf | no dependency, vector, prints on any printer |
 
 ## Tasks
@@ -66,6 +67,7 @@ Log medical cannabis use on a phone: strain, THC/CBD (% or mg), amount, active m
 - Sublingual oil: treated as oral (no sourced F for sublingual).
 
 ## Log
+- 2026-10-23 claude: D30 before/after ratings on doses, "How do you feel now?" banner, Trends card "Change after a dose", report column, CSV after columns; no-dose labeled as check-in. 42 tests, report 1 page (stress).
 - 2026-10-21 claude: D29 level check (median 7 d vs 28 d, ±10%) drives creep arrow in app + report; slope muted info; slope/level skip days before first entry. 40 tests, report 1 page (normal, 3-day, stress).
 - 2026-10-21 claude: Libra formulas fetched via temporary GH workflow (removed), compared by simulation. No code change yet.
 - 2026-10-21 claude: report: visual summary block at top (sparkline, |r| bars, strongest factors), side-by-side factor/amount tables, 1 page verified on worst case. 38 tests.

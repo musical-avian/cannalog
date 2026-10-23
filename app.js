@@ -11,6 +11,7 @@ import {
   dayKey,
   dayRange,
   dayStart,
+  doseRelief,
   entriesBetween,
   expandLoads,
   goodness,
@@ -26,6 +27,7 @@ import {
   mean,
   median,
   mgPerUnit,
+  needsAfterRating,
   planForMg,
   R_WEAK,
   RATE_WINDOW_DAYS,
@@ -73,7 +75,7 @@ const $ = (selector) => document.querySelector(selector);
 const UNDO_SECONDS = 6;
 const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 // Shown in Settings so you can tell which version the phone runs. Bump on every release (CLAUDE.md).
-const APP_VERSION = "2026-10-21.5";
+const APP_VERSION = "2026-10-23.1";
 // AGPL-3.0 §13: people using the hosted app must be offered the source.
 const SOURCE_URL = "https://github.com/musical-avian/cannalog";
 const TREND_WINDOW_DAYS = 7;
@@ -376,6 +378,45 @@ function closeLoad(loadId) {
   commit();
 }
 
+/** "pain 7 → 3 · mood 4": before → after when both were rated (D30). */
+function scoresText(entry) {
+  const after = entry.after?.scores ?? {};
+  const names = [...new Set([...Object.keys(entry.scores), ...Object.keys(after)])];
+  return names
+    .map((name) => {
+      const before = entry.scores[name] ?? "";
+      if (after[name] == null) return `${esc(name)} ${before}`;
+      return `${esc(name)} ${before} → ${after[name]}`;
+    })
+    .join(" · ");
+}
+
+/** "How do you feel now?" for the newest dose 30 min–6 h ago without an after rating. No notifications. */
+function afterRatingBanner() {
+  const now = new Date();
+  // mathEntries: sips carry their load's strain there, which the title needs. Ids are the stored ones.
+  const waiting = mathEntries()
+    .filter((e) => needsAfterRating(e, now))
+    .sort((a, b) => b.t.localeCompare(a.t));
+  const dose = waiting[0];
+  if (!dose) return "";
+  const time = new Date(dose.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `<div class="card load-banner">
+    <div class="row spread"><b>How do you feel now?</b><span class="muted">${doseTitle(dose)}, ${time}</span></div>
+    <div class="row"><button class="primary" data-rate-after="${dose.id}">Rate now</button><button data-skip-after="${dose.id}">Skip</button></div>
+  </div>`;
+}
+
+function skipAfterRating(entryId) {
+  const entry = state.entries.find((e) => e.id === entryId);
+  entry.after = { t: new Date().toISOString(), scores: {} };
+  commit();
+  toast("Skipped", () => {
+    delete entry.after;
+    commit();
+  });
+}
+
 function renderDay() {
   const entries = groupByDay(mathEntries())[shownDay] ?? [];
   const label = shownDay === dayKey(new Date()) ? "Today" : dayStart(shownDay).toDateString();
@@ -388,9 +429,7 @@ function renderDay() {
     runningThc = [runningThc[0] + active.thc[0], runningThc[1] + active.thc[1]];
     runningCbd = [runningCbd[0] + active.cbd[0], runningCbd[1] + active.cbd[1]];
     const time = new Date(entry.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const scores = Object.entries(entry.scores)
-      .map(([name, value]) => `${esc(name)} ${value}`)
-      .join(" · ");
+    const scores = scoresText(entry);
     const details = `
       ${scores ? `<div class="muted">${scores}</div>` : ""}
       ${entry.effects.length ? `<div class="row">${effectChips(entry.effects)}</div>` : ""}
@@ -411,6 +450,7 @@ function renderDay() {
   });
 
   $("#view-day").innerHTML = `
+    ${afterRatingBanner()}
     ${openLoadsBanner()}
     <div class="row spread">
       <button data-day="-1" aria-label="Previous day">‹</button>
@@ -663,6 +703,31 @@ function correlationsCard() {
     </div>`;
 }
 
+/** "~40 min" / "~1.5 h" */
+function durationText(minutes) {
+  if (minutes < 90) return `~${Math.round(minutes)} min`;
+  return `~${round1(minutes / 60)} h`;
+}
+
+/** Before → after a dose, per symptom (D30). Only doses where both were rated. */
+function reliefCard() {
+  const today = dayKey(new Date());
+  const entries = entriesBetween(mathEntries(), addDays(today, -(LONG_WEEKS * 7 - 1)), today);
+  const rows = doseRelief(entries, state.settings.symptoms)
+    .filter((row) => row.n > 0)
+    .map((row) => {
+      const sign = row.change > 0 ? "+" : "";
+      const arrow = directionSpan(row.direction, row.change > 0);
+      return `<div class="row spread"><span>${esc(row.symptom.name)}</span><span>${round1(row.before)} → <b>${round1(row.after)}</b> ${arrow} <span class="${row.direction}">${sign}${round1(row.change)}</span>
+        <span class="muted">· n ${row.n} · ${durationText(row.medianMinutes)} later</span></span></div>`;
+    });
+  const body = rows.join("") || `<p class="muted">Rate "after" on a dose (Day view banner or edit the entry) to see this.</p>`;
+  return `<h2>Change after a dose <span class="muted">(6 months)</span></h2>
+    <div class="card">${body}
+      <p class="muted">Self-rated, no comparison with waiting without a dose; you tend to dose when it's worst, so some of the change would happen anyway.</p>
+    </div>`;
+}
+
 /** Fill #report with the German A4 report and open the print dialog ("Save as PDF"). */
 function printDoctorReport() {
   $("#report").innerHTML = buildReport({
@@ -723,6 +788,7 @@ function renderTrends() {
     <div class="card"><div id="chart-scores" class="chart"></div></div>
     <h2>Notes <span class="muted" id="notes-day">(tap a day on a chart)</span></h2>
     <div class="card" id="notes-list"><span class="muted">–</span></div>
+    ${reliefCard()}
     ${correlationsCard()}`;
 
   const width = $("#chart-mg").clientWidth;
@@ -1089,6 +1155,7 @@ function logCalcPlan() {
 
 let editingEntry = null; // the entry being edited, or null for a new one
 let draftScores = {};
+let draftAfter = null; // { t, scores } or null: how it felt later (D30)
 let draftEffects = [];
 let draftWatch = []; // watch tag names
 let draftContext = []; // [{ tag, value }] medication, habits
@@ -1110,6 +1177,7 @@ function updateDoseFields() {
   }
   const noDose = isNoDoseChecked() || sip;
   $("#dose-fields").hidden = noDose;
+  $("#entry-after").hidden = isNoDoseChecked() && !sip; // after ratings only belong to a dose
   form.amount.required = !noDose; // hidden required fields would block saving
   updateEntryPreview();
 }
@@ -1144,10 +1212,11 @@ function defaultEntryTime() {
   return new Date(dayStart(shownDay).getTime() + 12 * 3600 * 1000); // past day: noon
 }
 
-function openEntryDialog(entry) {
+function openEntryDialog(entry, { focusAfter = false } = {}) {
   const form = $("#entry-form");
   editingEntry = entry;
   draftScores = { ...(entry?.scores ?? {}) };
+  draftAfter = entry?.after ? { t: entry.after.t, scores: { ...entry.after.scores } } : null;
   draftEffects = [...(entry?.effects ?? [])];
   draftWatch = [...(entry?.watch ?? [])];
   draftContext = (entry?.context ?? []).map((item) => ({ ...item }));
@@ -1174,6 +1243,7 @@ function openEntryDialog(entry) {
   renderEntryChoices();
   updateDoseFields();
   $("#entry-dialog").showModal();
+  if (focusAfter) $("#entry-after").scrollIntoView({ block: "start" });
 }
 
 function editingSip() {
@@ -1186,21 +1256,33 @@ function defaultRoute() {
   return FORMS[strain.form].defaultRoute;
 }
 
-function renderEntryChoices() {
-  $("#entry-scores").innerHTML = state.settings.symptoms
+/**
+ * 0–10 buttons per symptom. `attribute` tells the click handler which set they belong to:
+ * "data-score" = before / at dose, "data-after-score" = later (D30).
+ */
+function scoreGrid(scores, attribute) {
+  return state.settings.symptoms
     .map((s) => {
       const buttons = [];
       for (let value = 0; value <= 10; value++) {
-        const pressed = draftScores[s.name] === value;
+        const pressed = scores[s.name] === value;
         const style = `background:${scoreColor(value, s.higherIsBetter)}`;
         buttons.push(
-          `<button type="button" data-score="${esc(s.name)}" data-value="${value}" aria-pressed="${pressed}" style="${style}">${value}</button>`,
+          `<button type="button" ${attribute}="${esc(s.name)}" data-value="${value}" aria-pressed="${pressed}" style="${style}">${value}</button>`,
         );
       }
       const hint = s.higherIsBetter ? "10 = best" : "10 = worst";
       return `<div class="field"><span class="muted">${esc(s.name)} (${hint}, tap again to clear)</span><div class="scores">${buttons.join("")}</div></div>`;
     })
     .join("");
+}
+
+function renderEntryChoices() {
+  $("#entry-scores").innerHTML = scoreGrid(draftScores, "data-score");
+  let ratedAt = "";
+  if (draftAfter) ratedAt = ` · rated ${new Date(draftAfter.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  $("#entry-after-title").textContent = `How you feel after (optional)${ratedAt}`;
+  $("#entry-after-scores").innerHTML = scoreGrid(draftAfter?.scores ?? {}, "data-after-score");
 
   $("#entry-effects").innerHTML = state.settings.effectTags
     .map((t) => {
@@ -1258,8 +1340,12 @@ function readEntryForm() {
     watch: [...draftWatch],
     context: draftContext.map((item) => ({ ...item })),
   };
+  if (draftAfter) common.after = { t: draftAfter.t, scores: { ...draftAfter.scores } };
   if (editingSip()) return { ...common, sipOf: editingEntry.sipOf };
-  if (isNoDoseChecked()) return { ...common, noDose: true };
+  if (isNoDoseChecked()) {
+    delete common.after; // no dose, nothing to rate "after"
+    return { ...common, noDose: true };
+  }
   const strain = selectedStrain();
   if (!strain) throw new Error("Pick a strain / product, or tick 'No dose'.");
   const dose = {
@@ -1392,6 +1478,12 @@ function onViewClick(event) {
 
   if (data.sip) return addSip(data.sip);
   if (data.emptyLoad) return closeLoad(data.emptyLoad);
+  if (data.skipAfter) return skipAfterRating(data.skipAfter);
+  if (data.rateAfter)
+    return openEntryDialog(
+      state.entries.find((e) => e.id === data.rateAfter),
+      { focusAfter: true },
+    );
   if (data.day === "today") shownDay = dayKey(new Date());
   else if (data.day) shownDay = addDays(shownDay, Number(data.day));
   else if (data.week) shownWeek = addDays(shownWeek, 7 * Number(data.week));
@@ -1477,9 +1569,12 @@ function onViewSubmit(event) {
 
 /** Score buttons and effect chips in the entry dialog. */
 function onEntryChoiceClick(event) {
-  const button = event.target.closest("button[data-score], button[data-effect], button[data-watch], button[data-context]");
+  const button = event.target.closest(
+    "button[data-score], button[data-after-score], button[data-effect], button[data-watch], button[data-context]",
+  );
   if (!button) return;
-  const { score, value, effect, watch, context } = button.dataset;
+  const { score, afterScore, value, effect, watch, context } = button.dataset;
+  if (afterScore) toggleAfterScore(afterScore, Number(value));
   if (context) {
     const alreadyOn = draftContext.some((item) => item.tag === context);
     if (alreadyOn) draftContext = draftContext.filter((item) => item.tag !== context);
@@ -1499,6 +1594,15 @@ function onEntryChoiceClick(event) {
     else draftEffects.push({ ...state.settings.effectTags.find((t) => t.tag === effect) });
   }
   renderEntryChoices();
+}
+
+/** First after-score sets the rating time to now. Clearing the last one removes "after" again. */
+function toggleAfterScore(name, value) {
+  if (!draftAfter) draftAfter = { t: new Date().toISOString(), scores: {} };
+  if (draftAfter.scores[name] === value) delete draftAfter.scores[name];
+  else draftAfter.scores[name] = value;
+  const wasSkipped = editingEntry?.after && Object.keys(editingEntry.after.scores).length === 0;
+  if (Object.keys(draftAfter.scores).length === 0 && !wasSkipped) draftAfter = null;
 }
 
 function wireEvents() {

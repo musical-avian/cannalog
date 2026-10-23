@@ -39,6 +39,8 @@ Entry = {
   effects: [{ tag: "dry mouth", good: false }],
   watch: ["craving"],              // optional, watch tag names
   context: [{ tag: "exercise", value: 30 }], // optional; value may be null
+  after: { t: "2026-10-18T08:30:00.000Z", scores: { pain: 3 } }, // optional (D30): how it felt later; scores = before.
+                                   // Dose or sip only; t not before the dose; empty scores = "Skip" on the banner
 }
 
 // Vaporizer load: a normal dose entry with
@@ -46,7 +48,7 @@ Entry = {
 // Sip = one use of a load: no strain/amount/route; sipOf must be an existing load's id.
 Sip = { id, t, sipOf: "load id", note, scores, effects, watch }
 
-// Entry without dose (craving, event, habit): no strain/amount/route; needs a tag, a score or a note.
+// Entry without dose (check-in, craving, event, habit): no strain/amount/route; needs a tag, a score or a note.
 NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 ```
 
@@ -55,7 +57,7 @@ NoDoseEntry = { id, t, noDose: true, note, scores, effects, watch }
 - **Share backup…**: share sheet (Drive, mail, Files). Sent as `text/plain` named `.json`, because Android refuses to share `application/json` files.
 - **Copy backup**: JSON text to the clipboard; if blocked, the text is shown to copy by hand. Works even when downloads are blocked.
 - **Restore**: from a file, or paste the copied text. Into an empty app (new phone) = exact restore incl. settings. Otherwise merges by id, backup wins; your settings stay. Broken text → nothing changes, error says why.
-- **Save CSV**: one row per entry, product mg + current-mode mg range, one column per symptom, watch tags.
+- **Save CSV**: one row per entry, product mg + current-mode mg range, one column per symptom, `after_time` + `after_<symptom>`, watch tags.
 - **App version** is shown at the bottom of the card.
 
 ## Broken saved data
